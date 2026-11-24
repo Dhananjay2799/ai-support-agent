@@ -115,7 +115,13 @@ class GetAccountArgs(_Args):
 
 
 class SearchPoliciesArgs(_Args):
-    query: str = Field(description="The customer's question, restated as a standalone search query.")
+    query: str = Field(
+        description=(
+            "A standalone question about Acme Cloud's documented policy, e.g. 'refund eligibility and "
+            "limits on the Pro plan'. Leave out account specifics like amounts, dates and charge ids; "
+            "get_account covers those."
+        )
+    )
 
 
 class IssueRefundArgs(_Args):

@@ -1,6 +1,6 @@
 # Retrieval and guardrail evaluation
 
-Generated 2026-11-24 16:22 UTC by `apps/api/scripts/run_evals.py` over 40 labeled questions (`evals/questions.jsonl`). Embeddings: `text-embedding-3-small`; judge: `gpt-6-luna`; knowledge base: 40 chunks.
+Generated 2026-11-24 19:32 UTC by `apps/api/scripts/run_evals.py` over 40 labeled questions (`evals/questions.jsonl`). Embeddings: `text-embedding-3-small`; judge: `gpt-6-luna`; knowledge base: 40 chunks.
 
 ## Summary
 
@@ -25,7 +25,7 @@ Best single similarity cut-off without the judge (answer if top cosine >= 0.31):
 | --- | --- | --- | --- | --- | --- |
 | in_scope | 20 | 0.382 | 0.541 | 0.674 | 20/20 |
 | tier_specific | 5 | 0.498 | 0.659 | 0.705 | 5/5 |
-| out_of_scope | 10 | 0.048 | 0.120 | 0.223 | 10/10 |
+| out_of_scope | 10 | 0.048 | 0.118 | 0.223 | 10/10 |
 | unanswerable_in_domain | 5 | 0.243 | 0.308 | 0.427 | 5/5 |
 
 ## Chunking comparison
@@ -44,7 +44,7 @@ Vector-only retrieval over each chunking, answerable questions. *Answer in top k
 | refund-timing | in_scope | pro | answer | answer | high | 0.542 | 1 | Refunds and billing > How refunds are paid |
 | failed-payment | in_scope | pro | answer | answer | middle | 0.422 | 1 | Refunds and billing > Billing dates and failed payments |
 | pro-storage | in_scope | any | answer | answer | high | 0.645 | 2 | Plans and limits > Storage add-ons |
-| recovery-code | in_scope | free | answer | answer | high | 0.641 | 1 | Account security and two-factor authentication > Resetting two-factor authentication with recovery codes |
+| recovery-code | in_scope | free | answer | answer | high | 0.640 | 1 | Account security and two-factor authentication > Resetting two-factor authentication with recovery codes |
 | lost-phone | in_scope | pro | answer | answer | high | 0.629 | 1 | Account security and two-factor authentication > Lost device and no recovery codes |
 | e409 | in_scope | pro | answer | answer | high | 0.524 | 1 | Troubleshooting sync errors > E-409: Conflicting edits |
 | e507 | in_scope | free | answer | answer | high | 0.524 | 1 | Troubleshooting sync errors > E-507: Storage full |
@@ -52,7 +52,7 @@ Vector-only retrieval over each chunking, answerable questions. *Answer in top k
 | export-files | in_scope | free | answer | answer | middle | 0.459 | 1 | Data export and account deletion > Exporting your files |
 | restore-account | in_scope | free | answer | answer | middle | 0.382 | 1 | Data export and account deletion > Deleting an account |
 | billing-records | in_scope | pro | answer | answer | high | 0.564 | 1 | Data export and account deletion > Deleting an account |
-| response-time | in_scope | pro | answer | answer | high | 0.539 | 2 | Support channels and response times > When the assistant hands over to a person |
+| response-time | in_scope | pro | answer | answer | high | 0.540 | 2 | Support channels and response times > When the assistant hands over to a person |
 | talk-to-human | in_scope | free | answer | answer | middle | 0.395 | 1 | Support channels and response times > When the assistant hands over to a person |
 | largest-file | in_scope | free | answer | answer | middle | 0.461 | 1 | Troubleshooting sync errors > E-413: File too large |
 | free-space | in_scope | pro | answer | answer | high | 0.607 | 1 | Troubleshooting sync errors > E-507: Storage full |
@@ -63,14 +63,14 @@ Vector-only retrieval over each chunking, answerable questions. *Answer in top k
 | duplicate-charge | in_scope | pro | answer | answer | high | 0.510 | 1 | Refunds and billing > Duplicate charges |
 | free-addon-refund | tier_specific | free | answer | answer | high | 0.586 | 1 | Refunds and billing > Free plan add-ons |
 | ent-2fa-reset | tier_specific | enterprise | answer | answer | high | 0.659 | 1 | Account security and two-factor authentication > Enterprise accounts |
-| pro-api-limit | tier_specific | pro | answer | answer | high | 0.676 | 1 | API access and rate limits > Rate limits |
+| pro-api-limit | tier_specific | pro | answer | answer | high | 0.675 | 1 | API access and rate limits > Rate limits |
 | ent-end-contract | tier_specific | enterprise | answer | answer | high | 0.498 | 1 | Cancellation and downgrades > Ending an Enterprise contract |
 | ent-audit-export | tier_specific | enterprise | answer | answer | high | 0.705 | 1 | Data export and account deletion > Exporting audit logs |
-| weather | out_of_scope | pro | escalate | escalate | low | 0.104 | — | Refunds and billing > Refund limits by plan |
+| weather | out_of_scope | pro | escalate | escalate | low | 0.101 | — | Refunds and billing > Refund limits by plan |
 | lasagna | out_of_scope | free | escalate | escalate | low | 0.051 | — | Account security and two-factor authentication > Verifying a customer's identity |
 | world-cup | out_of_scope | any | escalate | escalate | low | 0.048 | — | Plans and limits > Storage add-ons |
 | cloud-poem | out_of_scope | pro | escalate | escalate | low | 0.159 | — | API access and rate limits > Who can use the API |
-| translate | out_of_scope | free | escalate | escalate | low | 0.073 | — | Data export and account deletion > Privacy requests |
+| translate | out_of_scope | free | escalate | escalate | low | 0.072 | — | Data export and account deletion > Privacy requests |
 | percent | out_of_scope | any | escalate | escalate | low | 0.175 | — | API access and rate limits > Raising the limit |
 | laptop | out_of_scope | pro | escalate | escalate | low | 0.199 | — | Troubleshooting sync errors > E-409: Conflicting edits |
 | capital | out_of_scope | enterprise | escalate | escalate | low | 0.068 | — | Account security and two-factor authentication > Suspicious activity |

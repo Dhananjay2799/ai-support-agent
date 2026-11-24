@@ -79,6 +79,10 @@ Rules:
   Example: a passage about payment methods in general doesn't answer "Can I pay with PayPal?".
 - Questions unrelated to Acme Cloud are never answerable.
 - If the customer's plan is given, "my plan" means that plan.
+- The question may mention account details: amounts, dates, charge ids, account status.
+  Other tools check those against the customer's account. Judge only whether the passages
+  state the policy needed to answer. A question about refunding "last month's $29 charge"
+  is answerable if the passages give the refund eligibility rules, windows and limits.
 - `supporting_ids` lists only the passage ids that contain the answer; empty if not answerable.
 """
 
