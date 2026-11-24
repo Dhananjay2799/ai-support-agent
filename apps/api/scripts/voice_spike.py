@@ -81,7 +81,7 @@ async def grounded_answer(client: AsyncOpenAI, question: str, tier: str | None) 
     assessment = await assess(
         question,
         retrieval,
-        judge=OpenAISupportJudge(client, settings.judge_model),
+        judge=OpenAISupportJudge(client, settings.judge_model, settings.judge_reasoning_effort),
         thresholds=load_thresholds(),
     )
     if assessment.decision == "escalate":

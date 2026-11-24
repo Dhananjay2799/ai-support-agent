@@ -1,4 +1,3 @@
-# Placeholder until calibrated with real embeddings.
-# Regenerate with: uv run python -m scripts.run_evals --calibrate
-low: 0.30
-high: 0.55
+# Calibrated by scripts/run_evals.py --calibrate on 2026-11-24 15:42 UTC; see evals/results.md.
+low: 0.33
+high: 0.48

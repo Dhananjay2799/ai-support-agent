@@ -14,8 +14,10 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None, description="Postgres connection string")
     openai_api_key: str | None = None
     # Model ids are configuration, not code: OpenAI's lineup changes often.
-    agent_model: str = "gpt-5.4-mini"
-    judge_model: str = "gpt-5.4-mini"
+    agent_model: str = "gpt-6-luna"
+    judge_model: str = "gpt-6-luna"
+    # The judge answers a yes/no question; low effort keeps it around 1-2 s.
+    judge_reasoning_effort: Literal["none", "low", "medium", "high"] | None = "low"
     demo_mode: bool = Field(default=True, description="Enables personas and the chaos panel")
 
     @property

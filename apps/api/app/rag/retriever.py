@@ -34,7 +34,9 @@ with q as (
          to_tsquery('english', %(codes)s) as codes
 ),
 semantic as (
-  select c.id, row_number() over (order by c.embedding <=> q.embedding) as rank
+  select c.id,
+         1 - (c.embedding <=> q.embedding) as cosine,
+         row_number() over (order by c.embedding <=> q.embedding) as rank
   from public.kb_chunks c, q
   where %(tier)s::text is null or c.tiers @> array[%(tier)s::text]
   order by c.embedding <=> q.embedding
@@ -56,12 +58,17 @@ select c.id, c.doc_id, c.chunk_index, c.doc_title, c.section_path, c.content, c.
        1 - (c.embedding <=> q.embedding) as cosine,
        s.rank as semantic_rank,
        l.rank as lexical_rank,
-       coalesce(1.0 / (%(rrf_k)s + s.rank), 0) + coalesce(1.0 / (%(rrf_k)s + l.rank), 0) as rrf_score
+       coalesce(1.0 / (%(rrf_k)s + s.rank), 0) + coalesce(1.0 / (%(rrf_k)s + l.rank), 0) as rrf_score,
+       coalesce(c.fts @@ q.codes, false) as code_match,
+       -- Best semantic match in the whole (plan-filtered) KB, computed before the
+       -- LIMIT: the confidence gate must not depend on how keyword fusion reorders.
+       max(s.cosine) over () as best_cosine
 from semantic s
 full outer join lexical l on l.id = s.id
 join public.kb_chunks c on c.id = coalesce(s.id, l.id)
 cross join q
-order by rrf_score desc, cosine desc
+-- A section about the exact error code the customer quoted goes first; otherwise RRF.
+order by code_match desc, rrf_score desc, cosine desc
 limit %(top_n)s
 """
 
@@ -96,10 +103,14 @@ class RetrievalResult:
     query: str
     tier: str | None
     chunks: tuple[RetrievedChunk, ...]
+    best_cosine: float | None = None
 
     @property
     def top_cosine(self) -> float:
-        """Best semantic similarity among results: the confidence gate's input."""
+        """The confidence gate's input: the best semantic match in the eligible
+        knowledge base (falls back to the returned chunks when not provided)."""
+        if self.best_cosine is not None:
+            return self.best_cosine
         return max((c.cosine for c in self.chunks), default=0.0)
 
     def doc_ids(self, k: int | None = None) -> list[str]:
@@ -137,6 +148,7 @@ class HybridRetriever:
         async with conn.cursor() as cur:
             await cur.execute(_SEARCH_SQL, params)
             rows = await cur.fetchall()
+        best = float(rows[0]["best_cosine"]) if rows and rows[0]["best_cosine"] is not None else None
         chunks = tuple(
             RetrievedChunk(
                 id=row["id"],
@@ -153,4 +165,4 @@ class HybridRetriever:
             )
             for row in rows
         )
-        return RetrievalResult(query=question, tier=tier, chunks=chunks)
+        return RetrievalResult(query=question, tier=tier, chunks=chunks, best_cosine=best)

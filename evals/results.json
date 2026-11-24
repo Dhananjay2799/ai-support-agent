@@ -1,0 +1,809 @@
+{
+  "generated": "2026-11-24 15:42 UTC",
+  "embedding_model": "text-embedding-3-small",
+  "judge_model": "gpt-6-luna",
+  "kb_chunks": 40,
+  "thresholds": {
+    "low": 0.33,
+    "high": 0.48
+  },
+  "metrics": {
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "mrr": 0.96,
+    "thresholds": null,
+    "unsafe_answers": 0,
+    "correct_answers": 25,
+    "missed_answers": 0,
+    "correct_escalations": 15,
+    "judge_calls": 8
+  },
+  "chunking": {
+    "heading-aware": {
+      "chunks": 40,
+      "avg_tokens": 77.5,
+      "fact@1": 0.92,
+      "fact@3": 1.0,
+      "context_tokens@3": 239.64
+    },
+    "fixed 512-token": {
+      "chunks": 10,
+      "avg_tokens": 358.8,
+      "fact@1": 0.88,
+      "fact@3": 0.96,
+      "context_tokens@3": 1130.52
+    }
+  },
+  "questions": [
+    {
+      "id": "refund-timing",
+      "top_cosine": 0.5418,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "refunds-and-billing#5"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "refunds-and-billing"
+      ]
+    },
+    {
+      "id": "failed-payment",
+      "top_cosine": 0.4218,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "refunds-and-billing#6"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "cancellation-and-downgrades",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "account-security"
+      ]
+    },
+    {
+      "id": "pro-storage",
+      "top_cosine": 0.6445,
+      "hit_rank": 1,
+      "section_rank": 2,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "plans-and-limits#0"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "plans-and-limits",
+        "plans-and-limits",
+        "plans-and-limits",
+        "troubleshooting-sync-errors",
+        "refunds-and-billing"
+      ]
+    },
+    {
+      "id": "recovery-code",
+      "top_cosine": 0.6407,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "account-security#1"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "account-security",
+        "account-security",
+        "account-security",
+        "troubleshooting-sync-errors",
+        "account-security"
+      ]
+    },
+    {
+      "id": "lost-phone",
+      "top_cosine": 0.6287,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "account-security#2"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "account-security",
+        "account-security",
+        "account-security",
+        "account-security",
+        "data-export-and-deletion"
+      ]
+    },
+    {
+      "id": "e409",
+      "top_cosine": 0.5238,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "troubleshooting-sync-errors#3"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "e507",
+      "top_cosine": 0.5243,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "troubleshooting-sync-errors#6",
+          "plans-and-limits#3"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "plans-and-limits",
+        "troubleshooting-sync-errors",
+        "refunds-and-billing",
+        "account-security"
+      ]
+    },
+    {
+      "id": "e401",
+      "top_cosine": 0.6672,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "troubleshooting-sync-errors#1"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "account-security",
+        "troubleshooting-sync-errors"
+      ]
+    },
+    {
+      "id": "export-files",
+      "top_cosine": 0.4585,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "data-export-and-deletion#0"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "data-export-and-deletion",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors"
+      ]
+    },
+    {
+      "id": "restore-account",
+      "top_cosine": 0.3817,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "data-export-and-deletion#2"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "account-security",
+        "support-and-sla"
+      ]
+    },
+    {
+      "id": "billing-records",
+      "top_cosine": 0.5638,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "data-export-and-deletion#2"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "data-export-and-deletion",
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "data-export-and-deletion",
+        "refunds-and-billing"
+      ]
+    },
+    {
+      "id": "response-time",
+      "top_cosine": 0.5394,
+      "hit_rank": 1,
+      "section_rank": 2,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "support-and-sla#0"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "support-and-sla",
+        "support-and-sla",
+        "support-and-sla",
+        "data-export-and-deletion",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "talk-to-human",
+      "top_cosine": 0.3946,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "support-and-sla#1"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "support-and-sla",
+        "account-security",
+        "data-export-and-deletion",
+        "refunds-and-billing",
+        "data-export-and-deletion"
+      ]
+    },
+    {
+      "id": "largest-file",
+      "top_cosine": 0.4617,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "troubleshooting-sync-errors#4",
+          "plans-and-limits#0"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "data-export-and-deletion",
+        "plans-and-limits",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "free-space",
+      "top_cosine": 0.6074,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "troubleshooting-sync-errors#6"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "plans-and-limits",
+        "plans-and-limits",
+        "cancellation-and-downgrades",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "stuck-preparing",
+      "top_cosine": 0.5494,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "troubleshooting-sync-errors#7"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "data-export-and-deletion"
+      ]
+    },
+    {
+      "id": "downgrade-files",
+      "top_cosine": 0.6743,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "cancellation-and-downgrades#1"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "cancellation-and-downgrades",
+        "cancellation-and-downgrades",
+        "data-export-and-deletion",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors"
+      ]
+    },
+    {
+      "id": "suspicious-login",
+      "top_cosine": 0.4799,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "account-security#4"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "account-security",
+        "troubleshooting-sync-errors",
+        "account-security",
+        "account-security",
+        "account-security"
+      ]
+    },
+    {
+      "id": "renewal-date",
+      "top_cosine": 0.6113,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "refunds-and-billing#6"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "cancellation-and-downgrades",
+        "plans-and-limits",
+        "plans-and-limits",
+        "refunds-and-billing"
+      ]
+    },
+    {
+      "id": "duplicate-charge",
+      "top_cosine": 0.5101,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "refunds-and-billing#2"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "cancellation-and-downgrades",
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "free-addon-refund",
+      "top_cosine": 0.5862,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "refunds-and-billing#3"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "plans-and-limits",
+        "troubleshooting-sync-errors",
+        "plans-and-limits",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "ent-2fa-reset",
+      "top_cosine": 0.6586,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "account-security#3"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "account-security",
+        "account-security",
+        "account-security",
+        "account-security",
+        "account-security"
+      ]
+    },
+    {
+      "id": "pro-api-limit",
+      "top_cosine": 0.675,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The rate limit depends on whether the plan is Pro or Enterprise, but the question doesn't specify which plan the customer has."
+      },
+      "top_docs": [
+        "api-rate-limits",
+        "api-rate-limits",
+        "api-rate-limits",
+        "refunds-and-billing",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "ent-end-contract",
+      "top_cosine": 0.4977,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "cancellation-and-downgrades#2"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "cancellation-and-downgrades",
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "api-rate-limits",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "ent-audit-export",
+      "top_cosine": 0.7047,
+      "hit_rank": 1,
+      "section_rank": 1,
+      "verdict": {
+        "answerable": true,
+        "supporting_ids": [
+          "data-export-and-deletion#1"
+        ],
+        "missing": null
+      },
+      "top_docs": [
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "weather",
+      "top_cosine": 0.1035,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not provide a weather forecast for Boston tomorrow."
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "troubleshooting-sync-errors",
+        "plans-and-limits",
+        "account-security",
+        "support-and-sla"
+      ]
+    },
+    {
+      "id": "lasagna",
+      "top_cosine": 0.0514,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages contain no recipe or information about making vegetarian lasagna."
+      },
+      "top_docs": [
+        "account-security",
+        "troubleshooting-sync-errors",
+        "refunds-and-billing",
+        "data-export-and-deletion",
+        "account-security"
+      ]
+    },
+    {
+      "id": "world-cup",
+      "top_cosine": 0.0483,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not say who won the last FIFA World Cup."
+      },
+      "top_docs": [
+        "plans-and-limits",
+        "refunds-and-billing",
+        "troubleshooting-sync-errors",
+        "data-export-and-deletion",
+        "troubleshooting-sync-errors"
+      ]
+    },
+    {
+      "id": "cloud-poem",
+      "top_cosine": 0.1588,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not contain information for writing a poem about clouds."
+      },
+      "top_docs": [
+        "api-rate-limits",
+        "data-export-and-deletion",
+        "refunds-and-billing",
+        "data-export-and-deletion",
+        "troubleshooting-sync-errors"
+      ]
+    },
+    {
+      "id": "translate",
+      "top_cosine": 0.0728,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not provide a French translation of \u201cgood morning.\u201d"
+      },
+      "top_docs": [
+        "data-export-and-deletion",
+        "refunds-and-billing",
+        "account-security",
+        "plans-and-limits",
+        "support-and-sla"
+      ]
+    },
+    {
+      "id": "percent",
+      "top_cosine": 0.1753,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not address the arithmetic question. (17% of 340 is 57.8.)"
+      },
+      "top_docs": [
+        "api-rate-limits",
+        "troubleshooting-sync-errors",
+        "api-rate-limits",
+        "support-and-sla",
+        "api-rate-limits"
+      ]
+    },
+    {
+      "id": "laptop",
+      "top_cosine": 0.199,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not recommend laptops or provide specifications for video editing."
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "plans-and-limits",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "capital",
+      "top_cosine": 0.068,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not state the capital of Australia."
+      },
+      "top_docs": [
+        "account-security",
+        "account-security",
+        "account-security",
+        "account-security",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "check-engine",
+      "top_cosine": 0.2231,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages cover Acme Cloud sync errors and account security, not what to do about a car's check engine light."
+      },
+      "top_docs": [
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "troubleshooting-sync-errors",
+        "account-security",
+        "troubleshooting-sync-errors"
+      ]
+    },
+    {
+      "id": "python-framework",
+      "top_cosine": 0.1354,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not recommend or discuss Python web frameworks."
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "api-rate-limits",
+        "api-rate-limits",
+        "plans-and-limits",
+        "api-rate-limits"
+      ]
+    },
+    {
+      "id": "linux-app",
+      "top_cosine": 0.4267,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not state whether Acme Cloud offers a desktop app for Linux."
+      },
+      "top_docs": [
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "account-security",
+        "troubleshooting-sync-errors",
+        "support-and-sla"
+      ]
+    },
+    {
+      "id": "paypal",
+      "top_cosine": 0.2594,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not state whether PayPal is an accepted payment method."
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "account-security",
+        "cancellation-and-downgrades",
+        "refunds-and-billing"
+      ]
+    },
+    {
+      "id": "student-discount",
+      "top_cosine": 0.3076,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages list plan prices and billing policies but do not say whether Acme Cloud offers a student discount."
+      },
+      "top_docs": [
+        "refunds-and-billing",
+        "plans-and-limits",
+        "refunds-and-billing",
+        "plans-and-limits",
+        "refunds-and-billing"
+      ]
+    },
+    {
+      "id": "family-plan",
+      "top_cosine": 0.4105,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages list Free, Pro, and Enterprise plans but do not say whether a family plan for up to 5 people is available."
+      },
+      "top_docs": [
+        "plans-and-limits",
+        "plans-and-limits",
+        "refunds-and-billing",
+        "refunds-and-billing",
+        "plans-and-limits"
+      ]
+    },
+    {
+      "id": "data-centers",
+      "top_cosine": 0.2434,
+      "hit_rank": null,
+      "section_rank": null,
+      "verdict": {
+        "answerable": false,
+        "supporting_ids": [],
+        "missing": "The passages do not state where Acme Cloud's data centers are located."
+      },
+      "top_docs": [
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "data-export-and-deletion",
+        "support-and-sla"
+      ]
+    }
+  ]
+}

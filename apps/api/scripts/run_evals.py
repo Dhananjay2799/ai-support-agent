@@ -4,8 +4,8 @@
 
 1. Loads the knowledge base into the eval database with real embeddings.
 2. Runs hybrid retrieval and the support judge once per question.
-3. Sweeps (low, high) thresholds offline over those results.
-   --calibrate writes the best pair to app/rag/thresholds.yaml.
+3. Calibrates thresholds with a margin rule (see `calibrate`).
+   --calibrate writes them to app/rag/thresholds.yaml.
 4. Compares baselines: threshold-only gating and fixed-size chunking.
 5. Writes evals/results.md and evals/results.json.
 
@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import statistics
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -46,6 +47,7 @@ QUESTIONS = REPO_ROOT / "evals" / "questions.jsonl"
 RESULTS_MD = REPO_ROOT / "evals" / "results.md"
 RESULTS_JSON = REPO_ROOT / "evals" / "results.json"
 KB_DIR = REPO_ROOT / "kb"
+MARGIN = 0.05  # safety margin around the overlap zone, in cosine units
 
 Slice = Literal["in_scope", "tier_specific", "out_of_scope", "unanswerable_in_domain"]
 
@@ -58,6 +60,8 @@ class Question:
     question: str
     expected: Literal["answer", "escalate"]
     expected_docs: tuple[str, ...]
+    expected_sections: tuple[str, ...]
+    answer_contains: str | None
 
 
 @dataclass(frozen=True)
@@ -68,8 +72,17 @@ class Observation:
 
     @property
     def hit_rank(self) -> int | None:
+        """Rank of the first passage from an expected document."""
         for rank, doc_id in enumerate(self.retrieval.doc_ids(), start=1):
             if doc_id in self.question.expected_docs:
+                return rank
+        return None
+
+    @property
+    def section_rank(self) -> int | None:
+        """Rank of the first passage from the expected section: stricter than hit_rank."""
+        for rank, chunk in enumerate(self.retrieval.chunks, start=1):
+            if section_matches(chunk.section_path, self.question.expected_sections):
                 return rank
         return None
 
@@ -101,7 +114,25 @@ class Score:
 
 def load_questions() -> list[Question]:
     rows = [json.loads(line) for line in QUESTIONS.read_text(encoding="utf-8").splitlines() if line.strip()]
-    return [Question(**{**row, "expected_docs": tuple(row["expected_docs"])}) for row in rows]
+    return [
+        Question(
+            **{
+                **row,
+                "expected_docs": tuple(row["expected_docs"]),
+                "expected_sections": tuple(row["expected_sections"]),
+            }
+        )
+        for row in rows
+    ]
+
+
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.replace("**", ""))
+
+
+def section_matches(section_path: str, expected: tuple[str, ...]) -> bool:
+    last = section_path.split(" > ")[-1]
+    return any(last.startswith(name) for name in expected)
 
 
 def score(observations: list[Observation], thresholds: Thresholds) -> Score:
@@ -128,16 +159,29 @@ def score(observations: list[Observation], thresholds: Thresholds) -> Score:
     )
 
 
-def sweep(observations: list[Observation]) -> tuple[Score, list[Score]]:
-    """Pick thresholds lexicographically: fewest unsafe answers, then most correct
-    answers, then fewest judge calls. Among ties, take the middle candidate so the
-    pair isn't pinned against a single question's score."""
+def calibrate(observations: list[Observation]) -> Thresholds:
+    """Margin rule, chosen for safety over latency:
+
+    - low  = lowest score of any answerable question  - MARGIN
+    - high = highest score of any should-escalate one + MARGIN
+
+    Scores outside [low, high) are unambiguous on the labeled data, with room to
+    spare; everything in the overlap zone (plus the margins) goes to the judge.
+    Minimizing judge calls instead would pin `high` just above the worst
+    unanswerable question, so a slightly different question could slip through.
+    """
+    answerable = [o.retrieval.top_cosine for o in observations if o.question.expected == "answer"]
+    escalate = [o.retrieval.top_cosine for o in observations if o.question.expected == "escalate"]
+    low, high = min(answerable) - MARGIN, max(escalate) + MARGIN
+    if low >= high:  # classes separate even with margins: split the gap evenly
+        mid = (min(answerable) + max(escalate)) / 2
+        low, high = mid - MARGIN / 2, mid + MARGIN / 2
+    return Thresholds(low=round(low, 2), high=round(high, 2))
+
+
+def all_single_cutoffs(observations: list[Observation]) -> list[Score]:
     grid = [round(x * 0.01, 2) for x in range(5, 91)]
-    scores = [score(observations, Thresholds(low=lo, high=hi)) for lo in grid for hi in grid if hi > lo]
-    best_key = min((s.unsafe_answers, -s.correct_answers, s.judge_calls) for s in scores)
-    best = [s for s in scores if (s.unsafe_answers, -s.correct_answers, s.judge_calls) == best_key]
-    best.sort(key=lambda s: (s.thresholds.low, s.thresholds.high))
-    return best[len(best) // 2], scores
+    return [score(observations, Thresholds(low=t, high=t + 0.01)) for t in grid]
 
 
 def threshold_only_baseline(scores: list[Score], observations: list[Observation]) -> Score:
@@ -158,29 +202,38 @@ def threshold_only_baseline(scores: list[Score], observations: list[Observation]
     return min(rescored, key=lambda s: (s.unsafe_answers + s.missed_answers, s.unsafe_answers))
 
 
-def vector_hit_at(k: int, chunks: list[Chunk], vectors: list[Vector], q: Question, q_vec: Vector) -> bool:
+def vector_top_k(
+    k: int, chunks: list[Chunk], vectors: list[Vector], q: Question, q_vec: Vector
+) -> list[Chunk]:
     eligible = [(c, v) for c, v in zip(chunks, vectors, strict=True) if q.tier is None or q.tier in c.tiers]
-    ranked = sorted(eligible, key=lambda cv: cosine(q_vec, cv[1]), reverse=True)[:k]
-    return any(c.doc_id in q.expected_docs for c, _ in ranked)
+    return [c for c, _ in sorted(eligible, key=lambda cv: cosine(q_vec, cv[1]), reverse=True)[:k]]
+
+
+def contains_fact(chunks: list[Chunk], q: Question) -> bool:
+    if q.answer_contains is None:
+        return False
+    fact = normalize(q.answer_contains)
+    return any(fact in normalize(c.content) for c in chunks)
 
 
 async def chunking_comparison(
     embedder: OpenAIEmbedder, questions: list[Question], q_vectors: list[Vector]
 ) -> dict[str, dict[str, float]]:
+    """Same vector-only retrieval over two chunkings. The fair yardstick is whether the
+    passages handed to the model contain the answer, and how many tokens that costs."""
     answerable = [(q, v) for q, v in zip(questions, q_vectors, strict=True) if q.expected == "answer"]
+    strategies = {"heading-aware": load_kb(KB_DIR), "fixed 512-token": load_kb(KB_DIR, fixed=True)}
     report = {}
-    for name, chunks in {
-        "heading-aware": load_kb(KB_DIR),
-        "fixed 512-token": load_kb(KB_DIR, fixed=True),
-    }.items():
+    for name, chunks in strategies.items():
         vectors = await embedder.embed([c.embedding_text for c in chunks])
-        hits1 = sum(vector_hit_at(1, chunks, vectors, q, v) for q, v in answerable)
-        hits3 = sum(vector_hit_at(3, chunks, vectors, q, v) for q, v in answerable)
+        top1 = [(q, vector_top_k(1, chunks, vectors, q, v)) for q, v in answerable]
+        top3 = [(q, vector_top_k(3, chunks, vectors, q, v)) for q, v in answerable]
         report[name] = {
             "chunks": len(chunks),
-            "hit@1": hits1 / len(answerable),
-            "hit@3": hits3 / len(answerable),
             "avg_tokens": statistics.mean(c.token_count for c in chunks),
+            "fact@1": sum(contains_fact(t, q) for q, t in top1) / len(answerable),
+            "fact@3": sum(contains_fact(t, q) for q, t in top3) / len(answerable),
+            "context_tokens@3": statistics.mean(sum(c.token_count for c in t) for _, t in top3),
         }
     return report
 
@@ -198,9 +251,12 @@ def write_reports(
 ) -> None:
     answerable = [o for o in observations if o.question.expected == "answer"]
     ranks = [o.hit_rank for o in answerable]
+    sections = [o.section_rank for o in answerable]
     hit1 = sum(r == 1 for r in ranks) / len(answerable)
     hit3 = sum(r is not None and r <= 3 for r in ranks) / len(answerable)
-    mrr = sum(1 / r for r in ranks if r) / len(answerable)
+    sec1 = sum(r == 1 for r in sections) / len(answerable)
+    sec3 = sum(r is not None and r <= 3 for r in sections) / len(answerable)
+    mrr = sum(1 / r for r in sections if r) / len(answerable)
     t = chosen.thresholds
 
     lines = [
@@ -214,10 +270,11 @@ def write_reports(
         "",
         "| Metric | Value |",
         "| --- | --- |",
-        f"| Retrieval hit@1 (answerable questions) | {_pct(hit1)} |",
-        f"| Retrieval hit@3 (answerable questions) | {_pct(hit3)} |",
-        f"| Retrieval MRR | {mrr:.2f} |",
-        f"| Calibrated thresholds | low = {t.low:.2f}, high = {t.high:.2f} |",
+        f"| Right section ranked first (answerable questions) | {_pct(sec1)} |",
+        f"| Right section in top 3 | {_pct(sec3)} |",
+        f"| Section MRR | {mrr:.2f} |",
+        f"| Right document ranked first / in top 3 | {_pct(hit1)} / {_pct(hit3)} |",
+        f"| Thresholds (margin rule, ±{MARGIN:.2f}) | low = {t.low:.2f}, high = {t.high:.2f} |",
         f"| Unsafe answers (should have escalated) | {chosen.unsafe_answers} |",
         f"| Escalation precision | {_pct(chosen.escalation_precision)} |",
         f"| Escalation recall | {_pct(chosen.escalation_recall)} |",
@@ -245,21 +302,24 @@ def write_reports(
         )
     lines += [
         "",
-        "## Chunking comparison (vector-only retrieval, answerable questions)",
+        "## Chunking comparison",
         "",
-        "| Strategy | Chunks | Avg tokens | hit@1 | hit@3 |",
-        "| --- | --- | --- | --- | --- |",
+        "Vector-only retrieval over each chunking, answerable questions. *Answer in top k* means the "
+        "passages handed to the model contain the labeled answer text.",
+        "",
+        "| Strategy | Chunks | Avg tokens | Answer in top 1 | Answer in top 3 | Context tokens (top 3) |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for name, row in chunking.items():
         lines.append(
-            f"| {name} | {row['chunks']:.0f} | {row['avg_tokens']:.0f} "
-            f"| {_pct(row['hit@1'])} | {_pct(row['hit@3'])} |"
+            f"| {name} | {row['chunks']:.0f} | {row['avg_tokens']:.0f} | {_pct(row['fact@1'])} "
+            f"| {_pct(row['fact@3'])} | {row['context_tokens@3']:.0f} |"
         )
     lines += [
         "",
         "## Every question",
         "",
-        "| Id | Slice | Tier | Expected | Decision | Band | Top cosine | Hit rank | Top section |",
+        "| Id | Slice | Tier | Expected | Decision | Band | Top cosine | Section rank | Top section |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for o in observations:
@@ -268,7 +328,8 @@ def write_reports(
         top = o.retrieval.chunks[0].section_path if o.retrieval.chunks else "—"
         lines.append(
             f"| {o.question.id} | {o.question.slice} | {o.question.tier or 'any'} | {o.question.expected} "
-            f"| {a.decision}{mark} | {a.band} | {o.retrieval.top_cosine:.3f} | {o.hit_rank or '—'} | {top} |"
+            f"| {a.decision}{mark} | {a.band} | {o.retrieval.top_cosine:.3f} "
+            f"| {o.section_rank or '—'} | {top} |"
         )
     lines += [
         "",
@@ -295,6 +356,7 @@ def write_reports(
                         "id": o.question.id,
                         "top_cosine": round(o.retrieval.top_cosine, 4),
                         "hit_rank": o.hit_rank,
+                        "section_rank": o.section_rank,
                         "verdict": o.verdict.model_dump(),
                         "top_docs": o.retrieval.doc_ids(5),
                     }
@@ -308,14 +370,14 @@ def write_reports(
     )
 
 
-async def main(calibrate: bool) -> None:
+async def main(write_thresholds: bool) -> None:
     url = os.environ.get("EVAL_DATABASE_URL")
     if not url:
         raise SystemExit("Set EVAL_DATABASE_URL to a disposable database (the KB table gets replaced).")
     settings = get_settings()
     client = get_openai()
     embedder = OpenAIEmbedder(client)
-    judge = OpenAISupportJudge(client, settings.judge_model)
+    judge = OpenAISupportJudge(client, settings.judge_model, settings.judge_reasoning_effort)
     questions = load_questions()
 
     conn = await AsyncConnection.connect(url, row_factory=dict_row, autocommit=True)
@@ -339,10 +401,8 @@ async def main(calibrate: bool) -> None:
     verdicts = await asyncio.gather(*(judged(q, r) for q, r in zip(questions, retrievals, strict=True)))
     observations = [Observation(q, r, v) for q, r, v in zip(questions, retrievals, verdicts, strict=True)]
 
-    chosen, all_scores = sweep(observations)
-    if not calibrate:
-        chosen = score(observations, load_thresholds())
-    baseline = threshold_only_baseline(all_scores, observations)
+    chosen = score(observations, calibrate(observations) if write_thresholds else load_thresholds())
+    baseline = threshold_only_baseline(all_single_cutoffs(observations), observations)
     chunking = await chunking_comparison(embedder, questions, q_vectors)
     meta: dict[str, object] = {
         "generated": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
@@ -352,7 +412,7 @@ async def main(calibrate: bool) -> None:
     }
     write_reports(observations, chosen, baseline, chunking, meta)
 
-    if calibrate:
+    if write_thresholds:
         t = chosen.thresholds
         THRESHOLDS_PATH.write_text(
             "# Calibrated by scripts/run_evals.py --calibrate on "

@@ -67,3 +67,19 @@ def test_error_code_query() -> None:
 
     assert error_code_query("Seeing E-409 and e413 again") == "e409 | e413"
     assert error_code_query("my files won't sync") is None
+
+
+async def test_confidence_uses_best_semantic_match_not_fused_order(db: AsyncConnection[DictRow]) -> None:
+    retriever = await _loaded(db)
+    result = await retriever.search(db, "how long do refunds take to appear", tier="pro")
+    [embedding] = await HashingEmbedder().embed(["how long do refunds take to appear"])
+    from app.rag.embeddings import to_pgvector
+
+    cur = await db.execute(
+        "select max(1 - (embedding <=> %s::extensions.vector)) as best from public.kb_chunks "
+        "where tiers @> array['pro']",
+        (to_pgvector(embedding),),
+    )
+    row = await cur.fetchone()
+    assert row is not None
+    assert abs(result.top_cosine - row["best"]) < 1e-9

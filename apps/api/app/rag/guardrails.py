@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 import yaml
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, Omit, omit
+from openai.types.shared_params import Reasoning
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.rag.retriever import RetrievalResult, RetrievedChunk
@@ -81,9 +82,15 @@ def format_passages(chunks: Sequence[RetrievedChunk]) -> str:
 
 
 class OpenAISupportJudge:
-    def __init__(self, client: AsyncOpenAI, model: str) -> None:
+    def __init__(
+        self,
+        client: AsyncOpenAI,
+        model: str,
+        reasoning_effort: Literal["none", "low", "medium", "high"] | None = None,
+    ) -> None:
         self._client = client
         self.model = model
+        self._reasoning: Reasoning | Omit = {"effort": reasoning_effort} if reasoning_effort else omit
 
     async def judge(self, question: str, chunks: Sequence[RetrievedChunk]) -> SupportVerdict:
         response = await self._client.responses.parse(
@@ -91,6 +98,7 @@ class OpenAISupportJudge:
             instructions=JUDGE_INSTRUCTIONS,
             input=f"Question: {question}\n\nPassages:\n\n{format_passages(chunks)}",
             text_format=SupportVerdict,
+            reasoning=self._reasoning,
         )
         verdict = response.output_parsed
         if verdict is None:
