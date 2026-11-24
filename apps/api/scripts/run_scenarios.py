@@ -191,7 +191,8 @@ def over_http(api: str) -> Callable[[str, str, str | None], AsyncIterator[AgentE
     return send
 
 
-async def main(api: str | None) -> None:
+async def main(api: str | None, only: str | None) -> None:
+    scenarios = [s for s in SCENARIOS if not only or only.lower() in s.name.lower()]
     pool: AsyncConnectionPool[Any] | None = None
     if api:
         send = over_http(api)
@@ -205,7 +206,7 @@ async def main(api: str | None) -> None:
         send = await in_process(pool)
 
     rows, passed = [], 0
-    for scenario in SCENARIOS:
+    for scenario in scenarios:
         if pool:
             async with pool.connection() as conn:
                 await conn.execute("select public.reset_demo_data()")
@@ -235,6 +236,9 @@ async def main(api: str | None) -> None:
     if pool:
         await pool.close()
 
+    if only:  # a partial run doesn't overwrite the full report
+        print(f"\n{passed}/{len(scenarios)} scenarios passed")
+        return
     where = f"the deployed API ({api})" if api else "the graph in-process against the eval database"
     OUT.write_text(
         "\n".join(
@@ -261,4 +265,6 @@ if __name__ == "__main__":
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--api", help="base URL of a deployed API to test instead of running in-process")
-    asyncio.run(main(parser.parse_args().api))
+    parser.add_argument("--only", help="run only scenarios whose name contains this text")
+    args = parser.parse_args()
+    asyncio.run(main(args.api, args.only))
