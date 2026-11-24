@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     database_url: str | None = Field(default=None, description="Postgres connection string")
     openai_api_key: str | None = None
+    # Model ids are configuration, not code: OpenAI's lineup changes often.
+    agent_model: str = "gpt-5.4-mini"
+    judge_model: str = "gpt-5.4-mini"
     demo_mode: bool = Field(default=True, description="Enables personas and the chaos panel")
 
     @property

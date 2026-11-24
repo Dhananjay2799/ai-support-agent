@@ -1,0 +1,40 @@
+{"id": "refund-timing", "slice": "in_scope", "tier": "pro", "question": "How long does it take for a refund to show up on my card?", "expected": "answer", "expected_docs": ["refunds-and-billing"]}
+{"id": "failed-payment", "slice": "in_scope", "tier": "pro", "question": "My card payment failed last week. Will I lose access to my files?", "expected": "answer", "expected_docs": ["refunds-and-billing"]}
+{"id": "pro-storage", "slice": "in_scope", "tier": null, "question": "How much storage comes with the Pro plan?", "expected": "answer", "expected_docs": ["plans-and-limits"]}
+{"id": "recovery-code", "slice": "in_scope", "tier": "free", "question": "How do I sign in with a recovery code?", "expected": "answer", "expected_docs": ["account-security"]}
+{"id": "lost-phone", "slice": "in_scope", "tier": "pro", "question": "I lost my phone and my recovery codes. How do I get back into my account?", "expected": "answer", "expected_docs": ["account-security"]}
+{"id": "e409", "slice": "in_scope", "tier": "pro", "question": "I keep getting error E-409 on a shared spreadsheet. What does it mean?", "expected": "answer", "expected_docs": ["troubleshooting-sync-errors"]}
+{"id": "e507", "slice": "in_scope", "tier": "free", "question": "Uploads are failing with E-507", "expected": "answer", "expected_docs": ["troubleshooting-sync-errors", "plans-and-limits"]}
+{"id": "e401", "slice": "in_scope", "tier": "pro", "question": "After I changed my password the desktop app shows E-401", "expected": "answer", "expected_docs": ["troubleshooting-sync-errors"]}
+{"id": "export-files", "slice": "in_scope", "tier": "free", "question": "How can I download a copy of all my files?", "expected": "answer", "expected_docs": ["data-export-and-deletion"]}
+{"id": "restore-account", "slice": "in_scope", "tier": "free", "question": "I deleted my account by mistake yesterday. Can I get it back?", "expected": "answer", "expected_docs": ["data-export-and-deletion"]}
+{"id": "billing-records", "slice": "in_scope", "tier": "pro", "question": "Do you keep my billing information after I delete my account?", "expected": "answer", "expected_docs": ["data-export-and-deletion"]}
+{"id": "response-time", "slice": "in_scope", "tier": "pro", "question": "How quickly will a person reply to my ticket?", "expected": "answer", "expected_docs": ["support-and-sla"]}
+{"id": "talk-to-human", "slice": "in_scope", "tier": "free", "question": "Can I talk to a real person?", "expected": "answer", "expected_docs": ["support-and-sla"]}
+{"id": "largest-file", "slice": "in_scope", "tier": "free", "question": "What's the biggest single file I can upload?", "expected": "answer", "expected_docs": ["plans-and-limits", "troubleshooting-sync-errors"]}
+{"id": "free-space", "slice": "in_scope", "tier": "pro", "question": "My storage is full. How do I free up space?", "expected": "answer", "expected_docs": ["troubleshooting-sync-errors", "plans-and-limits"]}
+{"id": "stuck-preparing", "slice": "in_scope", "tier": "pro", "question": "The desktop app has been stuck on Preparing for an hour", "expected": "answer", "expected_docs": ["troubleshooting-sync-errors"]}
+{"id": "downgrade-files", "slice": "in_scope", "tier": "pro", "question": "What happens to my team's files if we downgrade to Free?", "expected": "answer", "expected_docs": ["cancellation-and-downgrades"]}
+{"id": "suspicious-login", "slice": "in_scope", "tier": "pro", "question": "I got an alert about a sign-in from a country I've never been to", "expected": "answer", "expected_docs": ["account-security"]}
+{"id": "renewal-date", "slice": "in_scope", "tier": "pro", "question": "When does my monthly plan renew?", "expected": "answer", "expected_docs": ["refunds-and-billing"]}
+{"id": "duplicate-charge", "slice": "in_scope", "tier": "pro", "question": "I was charged twice for this month's subscription", "expected": "answer", "expected_docs": ["refunds-and-billing"]}
+{"id": "free-addon-refund", "slice": "tier_specific", "tier": "free", "question": "Can I get my money back for the 50 GB storage add-on I bought?", "expected": "answer", "expected_docs": ["refunds-and-billing", "plans-and-limits"]}
+{"id": "ent-2fa-reset", "slice": "tier_specific", "tier": "enterprise", "question": "How do I reset two-factor for someone on my team?", "expected": "answer", "expected_docs": ["account-security"]}
+{"id": "pro-api-limit", "slice": "tier_specific", "tier": "pro", "question": "What's the API rate limit on my plan?", "expected": "answer", "expected_docs": ["api-rate-limits"]}
+{"id": "ent-end-contract", "slice": "tier_specific", "tier": "enterprise", "question": "We want to end our contract. How much notice do we need to give?", "expected": "answer", "expected_docs": ["cancellation-and-downgrades"]}
+{"id": "ent-audit-export", "slice": "tier_specific", "tier": "enterprise", "question": "Can I export our audit log?", "expected": "answer", "expected_docs": ["data-export-and-deletion"]}
+{"id": "weather", "slice": "out_of_scope", "tier": "pro", "question": "What's the weather going to be in Boston tomorrow?", "expected": "escalate", "expected_docs": []}
+{"id": "lasagna", "slice": "out_of_scope", "tier": "free", "question": "Give me a recipe for vegetarian lasagna.", "expected": "escalate", "expected_docs": []}
+{"id": "world-cup", "slice": "out_of_scope", "tier": null, "question": "Who won the last FIFA World Cup?", "expected": "escalate", "expected_docs": []}
+{"id": "cloud-poem", "slice": "out_of_scope", "tier": "pro", "question": "Write a short poem about clouds.", "expected": "escalate", "expected_docs": []}
+{"id": "translate", "slice": "out_of_scope", "tier": "free", "question": "Translate 'good morning' into French.", "expected": "escalate", "expected_docs": []}
+{"id": "percent", "slice": "out_of_scope", "tier": null, "question": "What is 17% of 340?", "expected": "escalate", "expected_docs": []}
+{"id": "laptop", "slice": "out_of_scope", "tier": "pro", "question": "Which laptop should I buy for video editing?", "expected": "escalate", "expected_docs": []}
+{"id": "capital", "slice": "out_of_scope", "tier": "enterprise", "question": "What's the capital of Australia?", "expected": "escalate", "expected_docs": []}
+{"id": "check-engine", "slice": "out_of_scope", "tier": "free", "question": "My car's check engine light is on. What should I do?", "expected": "escalate", "expected_docs": []}
+{"id": "python-framework", "slice": "out_of_scope", "tier": "pro", "question": "Can you recommend a good Python web framework?", "expected": "escalate", "expected_docs": []}
+{"id": "linux-app", "slice": "unanswerable_in_domain", "tier": "pro", "question": "Is there an Acme Cloud desktop app for Linux?", "expected": "escalate", "expected_docs": []}
+{"id": "paypal", "slice": "unanswerable_in_domain", "tier": "pro", "question": "Can I pay with PayPal?", "expected": "escalate", "expected_docs": []}
+{"id": "student-discount", "slice": "unanswerable_in_domain", "tier": "free", "question": "Do you offer a student discount?", "expected": "escalate", "expected_docs": []}
+{"id": "family-plan", "slice": "unanswerable_in_domain", "tier": "free", "question": "Is there a family plan for up to 5 people?", "expected": "escalate", "expected_docs": []}
+{"id": "data-centers", "slice": "unanswerable_in_domain", "tier": "enterprise", "question": "Where are your data centers located?", "expected": "escalate", "expected_docs": []}
