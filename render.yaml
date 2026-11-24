@@ -1,0 +1,26 @@
+# Render Blueprint for the API. Paths are relative to the repo root.
+# The web app deploys separately on Vercel (project root: apps/web).
+services:
+  - type: web
+    name: ai-support-agent-api
+    runtime: docker
+    rootDir: apps/api
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    region: ohio            # same area as the Supabase project (us-east-2)
+    # Free instances sleep after 15 idle minutes. Switch to a paid plan
+    # (e.g. 0.5c-512mb) before submitting so reviewers never hit a cold start.
+    plan: free
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - apps/api/**
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        sync: false         # e.g. https://ai-support-agent.vercel.app
+      - key: DATABASE_URL
+        sync: false         # Supabase transaction pooler URI (needed from Day 2)
+      - key: OPENAI_API_KEY
+        sync: false         # needed from Day 2

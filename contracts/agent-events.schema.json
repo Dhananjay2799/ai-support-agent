@@ -1,0 +1,427 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Contracts",
+  "description": "Generated from apps/api/app/contracts. Do not edit by hand.",
+  "type": "object",
+  "properties": {
+    "event": {
+      "$ref": "#/definitions/AgentEvent"
+    },
+    "chatRequest": {
+      "$ref": "#/definitions/ChatRequest"
+    }
+  },
+  "definitions": {
+    "DoneEvent": {
+      "additionalProperties": false,
+      "description": "Always the last event of a turn.",
+      "properties": {
+        "type": {
+          "const": "done",
+          "default": "done",
+          "type": "string"
+        },
+        "turn_id": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/definitions/Usage"
+        },
+        "cost_usd": {
+          "default": 0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "latency_ms": {
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "turn_id",
+        "usage",
+        "cost_usd",
+        "latency_ms"
+      ],
+      "title": "DoneEvent",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "error",
+          "default": "error",
+          "type": "string"
+        },
+        "code": {
+          "enum": [
+            "llm_timeout",
+            "rate_limited",
+            "tool_failed",
+            "budget_exceeded",
+            "internal"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "code",
+        "message",
+        "retryable"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "EscalationEvent": {
+      "additionalProperties": false,
+      "description": "The conversation was handed to a human; the agent stops taking actions.",
+      "properties": {
+        "type": {
+          "const": "escalation",
+          "default": "escalation",
+          "type": "string"
+        },
+        "ticket_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "priority": {
+          "default": "normal",
+          "enum": [
+            "low",
+            "normal",
+            "high",
+            "urgent"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "ticket_id",
+        "reason",
+        "priority"
+      ],
+      "title": "EscalationEvent",
+      "type": "object"
+    },
+    "GuardrailEvent": {
+      "additionalProperties": false,
+      "description": "Outcome of the confidence gate for the current answer.",
+      "properties": {
+        "type": {
+          "const": "guardrail",
+          "default": "guardrail",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "decision": {
+          "enum": [
+            "answer",
+            "verify",
+            "escalate"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "confidence",
+        "decision",
+        "reason"
+      ],
+      "title": "GuardrailEvent",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Span": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "node",
+            "llm",
+            "tool",
+            "retrieval",
+            "voice"
+          ],
+          "type": "string"
+        },
+        "start_ms": {
+          "description": "Milliseconds since the turn started",
+          "type": "number"
+        },
+        "end_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "attributes": {
+          "additionalProperties": {
+            "$ref": "#/definitions/JsonValue"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "parent_id",
+        "name",
+        "kind",
+        "start_ms",
+        "end_ms",
+        "attributes"
+      ],
+      "title": "Span",
+      "type": "object"
+    },
+    "StepEvent": {
+      "additionalProperties": false,
+      "description": "A tool started, completed or failed. `id` is unique per tool invocation.",
+      "properties": {
+        "type": {
+          "const": "step",
+          "default": "step",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "label": {
+          "description": "Human-readable status, e.g. 'Verifying account tier…'",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "started",
+            "completed",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "tool",
+        "label",
+        "status",
+        "duration_ms",
+        "detail"
+      ],
+      "title": "StepEvent",
+      "type": "object"
+    },
+    "TokenEvent": {
+      "additionalProperties": false,
+      "description": "A chunk of the assistant's reply text.",
+      "properties": {
+        "type": {
+          "const": "token",
+          "default": "token",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "TokenEvent",
+      "type": "object"
+    },
+    "TraceEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "trace",
+          "default": "trace",
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/definitions/Span"
+        }
+      },
+      "required": [
+        "type",
+        "span"
+      ],
+      "title": "TraceEvent",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cached_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cached_tokens"
+      ],
+      "title": "Usage",
+      "type": "object"
+    },
+    "AgentEvent": {
+      "discriminator": {
+        "mapping": {
+          "done": "#/definitions/DoneEvent",
+          "error": "#/definitions/ErrorEvent",
+          "escalation": "#/definitions/EscalationEvent",
+          "guardrail": "#/definitions/GuardrailEvent",
+          "step": "#/definitions/StepEvent",
+          "token": "#/definitions/TokenEvent",
+          "trace": "#/definitions/TraceEvent"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/definitions/TokenEvent"
+        },
+        {
+          "$ref": "#/definitions/StepEvent"
+        },
+        {
+          "$ref": "#/definitions/GuardrailEvent"
+        },
+        {
+          "$ref": "#/definitions/EscalationEvent"
+        },
+        {
+          "$ref": "#/definitions/TraceEvent"
+        },
+        {
+          "$ref": "#/definitions/ErrorEvent"
+        },
+        {
+          "$ref": "#/definitions/DoneEvent"
+        }
+      ]
+    },
+    "ChatRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "description": "One id per conversation, shared by chat and voice",
+          "format": "uuid",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "persona_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Demo persona acting as the signed-in customer"
+        }
+      },
+      "required": [
+        "session_id",
+        "message"
+      ],
+      "title": "ChatRequest",
+      "type": "object"
+    }
+  }
+}

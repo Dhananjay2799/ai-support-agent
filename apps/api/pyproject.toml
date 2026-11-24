@@ -1,0 +1,40 @@
+[project]
+name = "support-agent-api"
+version = "0.1.0"
+description = "Customer support agent API: orchestrator, tools, RAG and voice control"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.120",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.16.3",
+    "pyyaml>=6.0.4",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+    "types-pyyaml>=6.0.12.20261122",
+]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "tests", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

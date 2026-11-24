@@ -1,0 +1,33 @@
+# Single source of truth for Acme Cloud's support rules.
+#
+# The policy engine enforces these values in code, and the knowledge base must
+# state the same numbers: tests/test_kb_consistency.py fails if kb/ drifts.
+
+currency: usd
+
+refunds:
+  # A refund needs an active contract. past_due and canceled accounts are blocked.
+  eligible_contract_statuses: [active]
+  tiers:
+    free:
+      refunds_allowed: false
+      auto_approve_limit: 0
+      window_days: 0
+    pro:
+      refunds_allowed: true
+      auto_approve_limit: 100
+      window_days: 30
+    enterprise:
+      refunds_allowed: true
+      auto_approve_limit: 500
+      window_days: 60
+
+support:
+  # First human response time for escalated tickets, by plan.
+  first_response_hours:
+    free: 72
+    pro: 24
+    enterprise: 4
+
+verification:
+  max_failed_attempts: 3
