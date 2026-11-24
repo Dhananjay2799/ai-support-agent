@@ -1,0 +1,55 @@
+"use client";
+
+import { SquarePen } from "lucide-react";
+import { useState } from "react";
+
+import { ChatPanel } from "@/components/chat/chat-panel";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DEFAULT_PERSONA, PERSONAS, personaById } from "@/lib/personas";
+
+export function SupportApp() {
+  const [persona, setPersona] = useState(DEFAULT_PERSONA);
+  const [conversation, setConversation] = useState(0);
+
+  return (
+    <div className="flex h-dvh flex-col">
+      <header className="border-b">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
+            A
+          </div>
+          <h1 className="text-sm font-medium whitespace-nowrap">Acme Cloud Support</h1>
+          <Badge variant="outline" className="hidden sm:inline-flex">
+            AI agent demo
+          </Badge>
+
+          <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="hidden sm:inline">Customer</span>
+            <select
+              value={persona.id}
+              onChange={(event) => {
+                setPersona(personaById(event.target.value));
+                setConversation((n) => n + 1);
+              }}
+              className="h-8 rounded-lg border bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              aria-label="Demo customer"
+            >
+              {PERSONAS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.id === "guest" ? "Guest (not signed in)" : `${p.name} · ${p.plan}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button variant="outline" size="sm" onClick={() => setConversation((n) => n + 1)}>
+            <SquarePen data-icon="inline-start" />
+            <span className="hidden sm:inline">New conversation</span>
+            <span className="sr-only sm:hidden">New conversation</span>
+          </Button>
+        </div>
+      </header>
+      <ChatPanel key={`${persona.id}:${conversation}`} persona={persona} />
+    </div>
+  );
+}

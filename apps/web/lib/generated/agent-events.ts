@@ -70,6 +70,10 @@ export interface EscalationEvent {
   ticket_id: string;
   reason: string;
   priority: "low" | "normal" | "high" | "urgent";
+  /**
+   * First-reply target for the customer's plan
+   */
+  first_response_hours: number;
 }
 /**
  * Knowledge-base passages the answer cited, after checking they were retrieved.

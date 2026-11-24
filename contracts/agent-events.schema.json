@@ -150,13 +150,18 @@
             "urgent"
           ],
           "type": "string"
+        },
+        "first_response_hours": {
+          "description": "First-reply target for the customer's plan",
+          "type": "integer"
         }
       },
       "required": [
         "type",
         "ticket_id",
         "reason",
-        "priority"
+        "priority",
+        "first_response_hours"
       ],
       "title": "EscalationEvent",
       "type": "object"

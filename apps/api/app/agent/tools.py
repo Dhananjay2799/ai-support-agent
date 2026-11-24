@@ -181,6 +181,7 @@ async def _open_ticket(
         ticket_id=ticket.public_id,
         reason=summary,
         priority=ticket.priority,
+        first_response_hours=escalation["first_response_hours"],
     )
     return escalation, event
 

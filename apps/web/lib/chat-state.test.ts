@@ -26,7 +26,7 @@ describe("applyEvent", () => {
     turn = applyEvent(turn, step("started"));
     turn = applyEvent(turn, step("completed", 120));
     expect(turn.steps).toEqual([
-      { id: "s1", tool: "verify_customer", label: "Verifying…", status: "completed", durationMs: 120 },
+      { id: "s1", tool: "verify_customer", label: "Verifying…", status: "completed", durationMs: 120, detail: null },
     ]);
   });
 

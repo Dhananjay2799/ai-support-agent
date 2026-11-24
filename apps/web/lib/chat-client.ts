@@ -8,6 +8,7 @@ const EVENT_TYPES = new Set<AgentEvent["type"]>([
   "step",
   "guardrail",
   "escalation",
+  "citations",
   "trace",
   "error",
   "done",

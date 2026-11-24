@@ -1,5 +1,6 @@
 import type {
   AgentEvent,
+  Citation,
   DoneEvent,
   ErrorEvent,
   EscalationEvent,
@@ -13,6 +14,7 @@ export interface Step {
   label: string;
   status: StepEvent["status"];
   durationMs: number | null;
+  detail: string | null;
 }
 
 export interface UserTurn {
@@ -29,6 +31,7 @@ export interface AssistantTurn {
   status: "streaming" | "done" | "error";
   guardrail?: GuardrailEvent;
   escalation?: EscalationEvent;
+  citations?: Citation[];
   error?: Pick<ErrorEvent, "message" | "retryable">;
   done?: DoneEvent;
 }
@@ -46,6 +49,7 @@ function upsertStep(steps: Step[], event: StepEvent): Step[] {
     label: event.label,
     status: event.status,
     durationMs: event.duration_ms,
+    detail: event.detail,
   };
   const index = steps.findIndex((step) => step.id === event.id);
   if (index === -1) return [...steps, next];
@@ -63,6 +67,8 @@ export function applyEvent(turn: AssistantTurn, event: AgentEvent): AssistantTur
       return { ...turn, guardrail: event };
     case "escalation":
       return { ...turn, escalation: event };
+    case "citations":
+      return { ...turn, citations: event.citations };
     case "error":
       return { ...turn, status: "error", error: { message: event.message, retryable: event.retryable } };
     case "done":

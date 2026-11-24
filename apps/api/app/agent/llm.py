@@ -73,7 +73,9 @@ class OpenAIResponder:
             instructions=instructions,
             input=cast(ResponseInputParam, list(items)),
             tools=tools,
-            parallel_tool_calls=False,  # one step at a time: clearer status, simpler state
+            # Several calls per step save model round trips; the graph still runs them one at
+            # a time, in order, so verify_customer listed first unlocks get_account after it.
+            parallel_tool_calls=True,
             reasoning={"effort": self._effort} if self._effort else omit,
             include=["reasoning.encrypted_content"],
             store=False,

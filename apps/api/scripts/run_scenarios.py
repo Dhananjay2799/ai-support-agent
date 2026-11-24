@@ -95,8 +95,8 @@ SCENARIOS = [
         "Elena: $1,200 refund over the limit goes to a person",
         "elena",
         ("Please refund the $1,200 seat expansion charge from last week.", "Yes, please escalate it."),
-        "refund blocked by the policy engine, high-priority ticket opened",
-        lambda t: any("over auto limit" in d for d in t.details("issue_refund")) and t.escalated(),
+        "no automatic refund; handed to a person (the policy engine blocks it if the agent tries)",
+        lambda t: not any("refunded" in d for d in t.details("issue_refund")) and t.escalated(),
     ),
     Scenario(
         "Tom: past-due account can't get a refund",

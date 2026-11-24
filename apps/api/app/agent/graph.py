@@ -180,8 +180,6 @@ def build_graph(
                 searches.append(outcome.updates["search"])
             force = force or outcome.updates.get("force_escalation")
 
-            import json
-
             outputs.append(
                 {
                     "type": "function_call_output",

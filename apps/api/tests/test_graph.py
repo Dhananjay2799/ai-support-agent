@@ -28,6 +28,15 @@ def call(name: str, **args: Any) -> ModelTurn:
     return ModelTurn(output_items=[item], text="", calls=[FunctionCall(call_id, name, arguments)])
 
 
+def calls(*turns: ModelTurn) -> ModelTurn:
+    """Several tool calls in one model step (parallel tool calls)."""
+    return ModelTurn(
+        output_items=[i for t in turns for i in t.output_items],
+        text="",
+        calls=[c for t in turns for c in t.calls],
+    )
+
+
 def say(text: str) -> ModelTurn:
     item = {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": text}]}
     return ModelTurn(output_items=[item], text=text)
@@ -104,6 +113,21 @@ async def test_priya_duplicate_charge_chains_four_tools(env: ToolEnv) -> None:
     async with env.pool.connection() as conn:
         refunds = await (await conn.execute("select count(*) as n from public.refunds")).fetchone()
     assert refunds is not None and refunds["n"] == 1
+
+
+async def test_batched_calls_run_in_order_so_verification_unlocks_the_account(env: ToolEnv) -> None:
+    model = ScriptedModel(
+        calls(call("verify_customer", email=None, zip_code=None), call("get_account")),
+        say("You have three recent charges."),
+    )
+    events = await turn(env, model, str(uuid.uuid4()), "what did you charge me?", persona="priya")
+
+    completed = [(e.tool, e.detail) for e in events if e.type == "step" and e.status == "completed"]
+    assert completed == [
+        ("verify_customer", "Priya Shah · Pro · active"),
+        ("get_account", "3 recent charges"),
+    ]
+    assert model.seen[1][1] == 5  # user message, two calls, two outputs
 
 
 async def test_memory_carries_across_turns(env: ToolEnv) -> None:

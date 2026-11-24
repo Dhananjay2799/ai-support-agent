@@ -74,6 +74,7 @@ class EscalationEvent(_Event):
     ticket_id: str
     reason: str
     priority: Priority = "normal"
+    first_response_hours: int = Field(description="First-reply target for the customer's plan")
 
 
 class Citation(_Event):
