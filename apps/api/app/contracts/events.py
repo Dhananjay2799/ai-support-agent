@@ -76,6 +76,19 @@ class EscalationEvent(_Event):
     priority: Priority = "normal"
 
 
+class Citation(_Event):
+    id: str = Field(description="Passage id, e.g. 'refunds-and-billing#5'")
+    doc_title: str
+    section: str
+
+
+class CitationsEvent(_Event):
+    """Knowledge-base passages the answer cited, after checking they were retrieved."""
+
+    type: Literal["citations"] = "citations"
+    citations: list[Citation]
+
+
 class TraceEvent(_Event):
     type: Literal["trace"] = "trace"
     span: Span
@@ -99,7 +112,14 @@ class DoneEvent(_Event):
 
 
 AgentEvent = Annotated[
-    TokenEvent | StepEvent | GuardrailEvent | EscalationEvent | TraceEvent | ErrorEvent | DoneEvent,
+    TokenEvent
+    | StepEvent
+    | GuardrailEvent
+    | EscalationEvent
+    | CitationsEvent
+    | TraceEvent
+    | ErrorEvent
+    | DoneEvent,
     Field(discriminator="type"),
 ]
 

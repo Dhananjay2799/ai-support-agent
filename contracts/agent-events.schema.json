@@ -12,6 +12,51 @@
     }
   },
   "definitions": {
+    "Citation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Passage id, e.g. 'refunds-and-billing#5'",
+          "type": "string"
+        },
+        "doc_title": {
+          "type": "string"
+        },
+        "section": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "doc_title",
+        "section"
+      ],
+      "title": "Citation",
+      "type": "object"
+    },
+    "CitationsEvent": {
+      "additionalProperties": false,
+      "description": "Knowledge-base passages the answer cited, after checking they were retrieved.",
+      "properties": {
+        "type": {
+          "const": "citations",
+          "default": "citations",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/definitions/Citation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "citations"
+      ],
+      "title": "CitationsEvent",
+      "type": "object"
+    },
     "DoneEvent": {
       "additionalProperties": false,
       "description": "Always the last event of a turn.",
@@ -355,6 +400,7 @@
     "AgentEvent": {
       "discriminator": {
         "mapping": {
+          "citations": "#/definitions/CitationsEvent",
           "done": "#/definitions/DoneEvent",
           "error": "#/definitions/ErrorEvent",
           "escalation": "#/definitions/EscalationEvent",
@@ -377,6 +423,9 @@
         },
         {
           "$ref": "#/definitions/EscalationEvent"
+        },
+        {
+          "$ref": "#/definitions/CitationsEvent"
         },
         {
           "$ref": "#/definitions/TraceEvent"

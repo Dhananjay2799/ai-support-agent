@@ -5,7 +5,7 @@
  * via the `definition` "AgentEvent".
  */
 export type AgentEvent =
-  TokenEvent | StepEvent | GuardrailEvent | EscalationEvent | TraceEvent | ErrorEvent | DoneEvent;
+  TokenEvent | StepEvent | GuardrailEvent | EscalationEvent | CitationsEvent | TraceEvent | ErrorEvent | DoneEvent;
 /**
  * This interface was referenced by `Contracts`'s JSON-Schema
  * via the `definition` "JsonValue".
@@ -70,6 +70,28 @@ export interface EscalationEvent {
   ticket_id: string;
   reason: string;
   priority: "low" | "normal" | "high" | "urgent";
+}
+/**
+ * Knowledge-base passages the answer cited, after checking they were retrieved.
+ *
+ * This interface was referenced by `Contracts`'s JSON-Schema
+ * via the `definition` "CitationsEvent".
+ */
+export interface CitationsEvent {
+  type: "citations";
+  citations: Citation[];
+}
+/**
+ * This interface was referenced by `Contracts`'s JSON-Schema
+ * via the `definition` "Citation".
+ */
+export interface Citation {
+  /**
+   * Passage id, e.g. 'refunds-and-billing#5'
+   */
+  id: string;
+  doc_title: string;
+  section: string;
 }
 /**
  * This interface was referenced by `Contracts`'s JSON-Schema

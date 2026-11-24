@@ -1,6 +1,8 @@
 from app.contracts.chat import ChatRequest
 from app.contracts.events import (
     AgentEvent,
+    Citation,
+    CitationsEvent,
     DoneEvent,
     ErrorEvent,
     EscalationEvent,
@@ -16,6 +18,8 @@ from app.contracts.events import (
 __all__ = [
     "AgentEvent",
     "ChatRequest",
+    "Citation",
+    "CitationsEvent",
     "DoneEvent",
     "ErrorEvent",
     "EscalationEvent",

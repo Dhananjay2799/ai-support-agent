@@ -25,6 +25,7 @@ from openai import AsyncOpenAI, Omit, omit
 from openai.types.shared_params import Reasoning
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.observability.usage import record
 from app.rag.retriever import RetrievalResult, RetrievedChunk
 
 THRESHOLDS_PATH = Path(__file__).with_name("thresholds.yaml")
@@ -100,6 +101,13 @@ class OpenAISupportJudge:
             text_format=SupportVerdict,
             reasoning=self._reasoning,
         )
+        if response.usage:
+            record(
+                self.model,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                cached_tokens=response.usage.input_tokens_details.cached_tokens,
+            )
         verdict = response.output_parsed
         if verdict is None:
             raise RuntimeError("support judge returned no structured output")
