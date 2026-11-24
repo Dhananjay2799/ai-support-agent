@@ -17,7 +17,7 @@ flowchart LR
     voice[Voice: waveform, captions]
     drawer[Observability drawer]
   end
-  subgraph API["FastAPI service (Render)"]
+  subgraph API["FastAPI service (Vercel Functions)"]
     graph[Agent graph<br/>LangGraph]
     sideband[Voice sideband]
     tools[Tools + policy engine]
@@ -89,6 +89,15 @@ After changing anything in `apps/api/app/contracts`, run `make contracts`.
 
 ## Deployment
 
-- **API:** Render Blueprint (`render.yaml`), Docker, health check on `/health`.
-- **Web:** Vercel with project root `apps/web` and `NEXT_PUBLIC_API_URL` set to the API URL.
-- **Database:** Supabase; apply `supabase/migrations` in order.
+Both apps run on Vercel as separate projects, with Supabase for the database.
+
+| Project | Root directory | Environment variables |
+| --- | --- | --- |
+| API (FastAPI on Vercel Functions, Fluid compute) | `apps/api` | `CORS_ORIGINS` = the web app's URL; from Day 2 `DATABASE_URL`, `OPENAI_API_KEY` |
+| Web (Next.js) | `apps/web` | `NEXT_PUBLIC_API_URL` = the API's URL (baked in at build time, so redeploy after changing it) |
+
+Functions are stateless and capped at 300 s on the Hobby plan, so all session state lives in
+Postgres and every stream (including a voice call's server connection) stays within that limit.
+`apps/api/Dockerfile` runs the same API on any container host if a persistent server is needed.
+
+Database: apply `supabase/migrations` in order.
