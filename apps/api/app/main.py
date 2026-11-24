@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routes import chat, health
+from app.routes import admin, chat, health
 
 
 def create_app() -> FastAPI:
@@ -12,10 +12,11 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
     app.include_router(health.router)
     app.include_router(chat.router)
+    app.include_router(admin.router)
     return app
 
 

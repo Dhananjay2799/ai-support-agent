@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # The judge answers a yes/no question; low effort keeps it around 1-2 s.
     judge_reasoning_effort: Literal["none", "low", "medium", "high"] | None = "low"
     demo_mode: bool = Field(default=True, description="Enables personas and the chaos panel")
+    admin_token: str | None = Field(default=None, description="Enables /admin endpoints when set")
 
     @property
     def cors_origin_list(self) -> list[str]:
