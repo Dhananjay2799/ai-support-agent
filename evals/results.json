@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-24 15:42 UTC",
+  "generated": "2026-11-24 16:22 UTC",
   "embedding_model": "text-embedding-3-small",
   "judge_model": "gpt-6-luna",
   "kb_chunks": 40,
@@ -16,7 +16,7 @@
     "correct_answers": 25,
     "missed_answers": 0,
     "correct_escalations": 15,
-    "judge_calls": 8
+    "judge_calls": 27
   },
   "chunking": {
     "heading-aware": {
@@ -97,7 +97,7 @@
     },
     {
       "id": "recovery-code",
-      "top_cosine": 0.6407,
+      "top_cosine": 0.6406,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
@@ -198,7 +198,7 @@
     },
     {
       "id": "export-files",
-      "top_cosine": 0.4585,
+      "top_cosine": 0.4586,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
@@ -238,7 +238,7 @@
     },
     {
       "id": "billing-records",
-      "top_cosine": 0.5638,
+      "top_cosine": 0.5639,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
@@ -298,7 +298,7 @@
     },
     {
       "id": "largest-file",
-      "top_cosine": 0.4617,
+      "top_cosine": 0.4615,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
@@ -359,7 +359,7 @@
     },
     {
       "id": "downgrade-files",
-      "top_cosine": 0.6743,
+      "top_cosine": 0.6742,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
@@ -419,15 +419,16 @@
     },
     {
       "id": "duplicate-charge",
-      "top_cosine": 0.5101,
+      "top_cosine": 0.5102,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
         "answerable": true,
         "supporting_ids": [
-          "refunds-and-billing#2"
+          "refunds-and-billing#2",
+          "refunds-and-billing#0"
         ],
-        "missing": null
+        "missing": "The passages say the most recent duplicate charge is fully refundable if it is within the refund window and auto-approval limit. For Pro, the request window is 30 days and the auto-approval limit is $100 per charge. The charge date and amount aren't given, so whether it qualifies under those conditions can't be determined."
       },
       "top_docs": [
         "refunds-and-billing",
@@ -439,7 +440,7 @@
     },
     {
       "id": "free-addon-refund",
-      "top_cosine": 0.5862,
+      "top_cosine": 0.5861,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
@@ -479,13 +480,15 @@
     },
     {
       "id": "pro-api-limit",
-      "top_cosine": 0.675,
+      "top_cosine": 0.6764,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
-        "answerable": false,
-        "supporting_ids": [],
-        "missing": "The rate limit depends on whether the plan is Pro or Enterprise, but the question doesn't specify which plan the customer has."
+        "answerable": true,
+        "supporting_ids": [
+          "api-rate-limits#1"
+        ],
+        "missing": null
       },
       "top_docs": [
         "api-rate-limits",
@@ -497,7 +500,7 @@
     },
     {
       "id": "ent-end-contract",
-      "top_cosine": 0.4977,
+      "top_cosine": 0.4976,
       "hit_rank": 1,
       "section_rank": 1,
       "verdict": {
@@ -537,13 +540,13 @@
     },
     {
       "id": "weather",
-      "top_cosine": 0.1035,
+      "top_cosine": 0.1036,
       "hit_rank": null,
       "section_rank": null,
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not provide a weather forecast for Boston tomorrow."
+        "missing": "The passages do not provide weather information or a forecast for Boston tomorrow."
       },
       "top_docs": [
         "refunds-and-billing",
@@ -555,13 +558,13 @@
     },
     {
       "id": "lasagna",
-      "top_cosine": 0.0514,
+      "top_cosine": 0.0515,
       "hit_rank": null,
       "section_rank": null,
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages contain no recipe or information about making vegetarian lasagna."
+        "missing": "The passages do not provide a vegetarian lasagna recipe."
       },
       "top_docs": [
         "account-security",
@@ -573,13 +576,13 @@
     },
     {
       "id": "world-cup",
-      "top_cosine": 0.0483,
+      "top_cosine": 0.0484,
       "hit_rank": null,
       "section_rank": null,
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not say who won the last FIFA World Cup."
+        "missing": "The passages do not state who won the last FIFA World Cup."
       },
       "top_docs": [
         "plans-and-limits",
@@ -591,13 +594,13 @@
     },
     {
       "id": "cloud-poem",
-      "top_cosine": 0.1588,
+      "top_cosine": 0.1589,
       "hit_rank": null,
       "section_rank": null,
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not contain information for writing a poem about clouds."
+        "missing": "The passages do not address writing a poem about clouds."
       },
       "top_docs": [
         "api-rate-limits",
@@ -615,7 +618,7 @@
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not provide a French translation of \u201cgood morning.\u201d"
+        "missing": "The passages do not provide a French translation of \u201cgood morning\u201d."
       },
       "top_docs": [
         "data-export-and-deletion",
@@ -633,7 +636,7 @@
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not address the arithmetic question. (17% of 340 is 57.8.)"
+        "missing": "The passages do not contain the information needed to calculate 17% of 340."
       },
       "top_docs": [
         "api-rate-limits",
@@ -651,7 +654,7 @@
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not recommend laptops or provide specifications for video editing."
+        "missing": "The passages do not recommend laptops for video editing."
       },
       "top_docs": [
         "troubleshooting-sync-errors",
@@ -699,7 +702,7 @@
     },
     {
       "id": "python-framework",
-      "top_cosine": 0.1354,
+      "top_cosine": 0.1355,
       "hit_rank": null,
       "section_rank": null,
       "verdict": {
@@ -723,7 +726,7 @@
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not state whether Acme Cloud offers a desktop app for Linux."
+        "missing": "The passages do not say whether Acme Cloud has a desktop app for Linux."
       },
       "top_docs": [
         "data-export-and-deletion",
@@ -741,7 +744,7 @@
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages do not state whether PayPal is an accepted payment method."
+        "missing": "The passages do not say whether PayPal is an accepted payment method."
       },
       "top_docs": [
         "refunds-and-billing",
@@ -759,7 +762,7 @@
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages list plan prices and billing policies but do not say whether Acme Cloud offers a student discount."
+        "missing": "The passages do not say whether Acme Cloud offers a student discount."
       },
       "top_docs": [
         "refunds-and-billing",
@@ -771,13 +774,13 @@
     },
     {
       "id": "family-plan",
-      "top_cosine": 0.4105,
+      "top_cosine": 0.4104,
       "hit_rank": null,
       "section_rank": null,
       "verdict": {
         "answerable": false,
         "supporting_ids": [],
-        "missing": "The passages list Free, Pro, and Enterprise plans but do not say whether a family plan for up to 5 people is available."
+        "missing": "The passages don't say whether Acme Cloud offers a family plan for up to 5 people."
       },
       "top_docs": [
         "plans-and-limits",

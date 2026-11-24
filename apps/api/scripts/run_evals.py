@@ -139,7 +139,7 @@ def score(observations: list[Observation], thresholds: Thresholds) -> Score:
     counts: Counter[str] = Counter()
     for obs in observations:
         band = thresholds.band(obs.retrieval.top_cosine)
-        counts["judge"] += band == "middle"
+        counts["judge"] += band != "low"
         decision = decide(obs.retrieval, thresholds, obs.verdict).decision
         expected = obs.question.expected
         key = {
@@ -279,7 +279,8 @@ def write_reports(
         f"| Escalation precision | {_pct(chosen.escalation_precision)} |",
         f"| Escalation recall | {_pct(chosen.escalation_recall)} |",
         f"| Answerable questions answered | {_pct(chosen.answer_rate)} |",
-        f"| Questions that needed the judge | {chosen.judge_calls} of {len(observations)} |",
+        f"| Questions checked by the judge (the rest were rejected by similarity alone) "
+        f"| {chosen.judge_calls} of {len(observations)} |",
         "",
         "## Why two layers",
         "",
@@ -287,7 +288,8 @@ def write_reports(
         f"(answer if top cosine >= {baseline.thresholds.high:.2f}): "
         f"{baseline.unsafe_answers} unsafe answers, "
         f"{baseline.missed_answers} answerable questions escalated. "
-        f"With the judge on the middle band: {chosen.unsafe_answers} unsafe, {chosen.missed_answers} missed.",
+        f"With the judge checking everything above the low cut-off: {chosen.unsafe_answers} unsafe, "
+        f"{chosen.missed_answers} missed.",
         "",
         "| Slice | Questions | Top cosine min | median | max | Correct decisions |",
         "| --- | --- | --- | --- | --- | --- |",
@@ -396,7 +398,7 @@ async def main(write_thresholds: bool) -> None:
 
     async def judged(q: Question, r: RetrievalResult) -> SupportVerdict:
         async with limit:
-            return await judge.judge(q.question, r.chunks)
+            return await judge.judge(q.question, r.chunks, tier=q.tier)
 
     verdicts = await asyncio.gather(*(judged(q, r) for q, r in zip(questions, retrievals, strict=True)))
     observations = [Observation(q, r, v) for q, r, v in zip(questions, retrievals, verdicts, strict=True)]

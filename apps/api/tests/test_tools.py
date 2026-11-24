@@ -1,54 +1,11 @@
 import json
-from collections.abc import AsyncIterator, Sequence
 from dataclasses import replace
-from pathlib import Path
 from typing import Any
 
 import pytest
-from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
 
 from app.agent.tools import ToolEnv, ToolSession, run_tool, tool_schemas
-from app.policy.config import load_policy
-from app.rag.chunking import load_kb
-from app.rag.embeddings import HashingEmbedder
-from app.rag.guardrails import SupportVerdict, Thresholds
-from app.rag.ingest import ingest
-from app.rag.retriever import HybridRetriever, RetrievedChunk
-from tests.conftest import TEST_DATABASE_URL
-
-KB_DIR = Path(__file__).resolve().parents[3] / "kb"
-
-
-class YesJudge:
-    async def judge(self, question: str, chunks: Sequence[RetrievedChunk]) -> SupportVerdict:
-        return SupportVerdict(answerable=True, supporting_ids=[chunks[0].citation_id], missing=None)
-
-
-@pytest.fixture
-async def env() -> AsyncIterator[ToolEnv]:
-    if not TEST_DATABASE_URL:
-        pytest.skip("TEST_DATABASE_URL not set")
-    pool: AsyncConnectionPool[Any] = AsyncConnectionPool(
-        TEST_DATABASE_URL,
-        kwargs={"autocommit": True, "row_factory": dict_row, "prepare_threshold": None},
-        open=False,
-    )
-    await pool.open()
-    embedder = HashingEmbedder()
-    async with pool.connection() as conn:
-        await conn.execute("select public.reset_demo_data()")
-        await ingest(conn, load_kb(KB_DIR), embedder)
-    yield ToolEnv(
-        pool=pool,
-        retriever=HybridRetriever(embedder),
-        judge=YesJudge(),
-        thresholds=Thresholds(low=-1.0, high=1.0),  # everything goes to the (fake) judge
-        policy=load_policy(),
-        demo_mode=True,
-    )
-    await pool.close()
-
+from app.rag.guardrails import Thresholds
 
 GUEST = ToolSession(
     session_id="00000000-0000-0000-0000-000000000001",

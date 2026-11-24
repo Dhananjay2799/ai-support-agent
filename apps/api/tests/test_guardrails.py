@@ -35,7 +35,9 @@ class FakeJudge:
         self.verdict = verdict
         self.calls = 0
 
-    async def judge(self, question: str, chunks: Sequence[RetrievedChunk]) -> SupportVerdict:
+    async def judge(
+        self, question: str, chunks: Sequence[RetrievedChunk], *, tier: str | None = None
+    ) -> SupportVerdict:
         self.calls += 1
         return self.verdict
 
@@ -51,11 +53,16 @@ async def test_low_similarity_escalates_without_calling_the_judge() -> None:
     assert judge.calls == 0
 
 
-async def test_high_similarity_answers_without_calling_the_judge() -> None:
+async def test_even_high_similarity_is_checked_by_the_judge() -> None:
+    """A keyword-dense query can score high without the docs answering it."""
     judge = FakeJudge(NO)
-    result = await assess("refund timing?", _result(0.8), judge=judge, thresholds=THRESHOLDS)
-    assert result.decision == "answer" and result.confidence == 1.0
-    assert judge.calls == 0
+    result = await assess(
+        "PayPal payment method for Pro plan", _result(0.8), judge=judge, thresholds=THRESHOLDS
+    )
+    assert result.decision == "escalate" and judge.calls == 1
+
+    confirmed = await assess("refund timing?", _result(0.8), judge=FakeJudge(YES), thresholds=THRESHOLDS)
+    assert confirmed.decision == "answer" and confirmed.confidence == 1.0
 
 
 async def test_middle_band_follows_the_judge() -> None:

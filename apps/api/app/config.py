@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Model ids are configuration, not code: OpenAI's lineup changes often.
     agent_model: str = "gpt-6-luna"
     judge_model: str = "gpt-6-luna"
+    agent_reasoning_effort: Literal["none", "low", "medium", "high"] | None = "low"
     # The judge answers a yes/no question; low effort keeps it around 1-2 s.
     judge_reasoning_effort: Literal["none", "low", "medium", "high"] | None = "low"
     demo_mode: bool = Field(default=True, description="Enables personas and the chaos panel")

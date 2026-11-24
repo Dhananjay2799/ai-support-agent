@@ -1,6 +1,6 @@
 # Retrieval and guardrail evaluation
 
-Generated 2026-11-24 15:42 UTC by `apps/api/scripts/run_evals.py` over 40 labeled questions (`evals/questions.jsonl`). Embeddings: `text-embedding-3-small`; judge: `gpt-6-luna`; knowledge base: 40 chunks.
+Generated 2026-11-24 16:22 UTC by `apps/api/scripts/run_evals.py` over 40 labeled questions (`evals/questions.jsonl`). Embeddings: `text-embedding-3-small`; judge: `gpt-6-luna`; knowledge base: 40 chunks.
 
 ## Summary
 
@@ -15,17 +15,17 @@ Generated 2026-11-24 15:42 UTC by `apps/api/scripts/run_evals.py` over 40 labele
 | Escalation precision | 100% |
 | Escalation recall | 100% |
 | Answerable questions answered | 100% |
-| Questions that needed the judge | 8 of 40 |
+| Questions checked by the judge (the rest were rejected by similarity alone) | 27 of 40 |
 
 ## Why two layers
 
-Best single similarity cut-off without the judge (answer if top cosine >= 0.31): 2 unsafe answers, 0 answerable questions escalated. With the judge on the middle band: 0 unsafe, 0 missed.
+Best single similarity cut-off without the judge (answer if top cosine >= 0.31): 2 unsafe answers, 0 answerable questions escalated. With the judge checking everything above the low cut-off: 0 unsafe, 0 missed.
 
 | Slice | Questions | Top cosine min | median | max | Correct decisions |
 | --- | --- | --- | --- | --- | --- |
 | in_scope | 20 | 0.382 | 0.541 | 0.674 | 20/20 |
 | tier_specific | 5 | 0.498 | 0.659 | 0.705 | 5/5 |
-| out_of_scope | 10 | 0.048 | 0.119 | 0.223 | 10/10 |
+| out_of_scope | 10 | 0.048 | 0.120 | 0.223 | 10/10 |
 | unanswerable_in_domain | 5 | 0.243 | 0.308 | 0.427 | 5/5 |
 
 ## Chunking comparison
@@ -54,7 +54,7 @@ Vector-only retrieval over each chunking, answerable questions. *Answer in top k
 | billing-records | in_scope | pro | answer | answer | high | 0.564 | 1 | Data export and account deletion > Deleting an account |
 | response-time | in_scope | pro | answer | answer | high | 0.539 | 2 | Support channels and response times > When the assistant hands over to a person |
 | talk-to-human | in_scope | free | answer | answer | middle | 0.395 | 1 | Support channels and response times > When the assistant hands over to a person |
-| largest-file | in_scope | free | answer | answer | middle | 0.462 | 1 | Troubleshooting sync errors > E-413: File too large |
+| largest-file | in_scope | free | answer | answer | middle | 0.461 | 1 | Troubleshooting sync errors > E-413: File too large |
 | free-space | in_scope | pro | answer | answer | high | 0.607 | 1 | Troubleshooting sync errors > E-507: Storage full |
 | stuck-preparing | in_scope | pro | answer | answer | high | 0.549 | 1 | Troubleshooting sync errors > Sync stuck on "Preparing…" |
 | downgrade-files | in_scope | pro | answer | answer | high | 0.674 | 1 | Cancellation and downgrades > Downgrading from Pro to Free |
@@ -63,7 +63,7 @@ Vector-only retrieval over each chunking, answerable questions. *Answer in top k
 | duplicate-charge | in_scope | pro | answer | answer | high | 0.510 | 1 | Refunds and billing > Duplicate charges |
 | free-addon-refund | tier_specific | free | answer | answer | high | 0.586 | 1 | Refunds and billing > Free plan add-ons |
 | ent-2fa-reset | tier_specific | enterprise | answer | answer | high | 0.659 | 1 | Account security and two-factor authentication > Enterprise accounts |
-| pro-api-limit | tier_specific | pro | answer | answer | high | 0.675 | 1 | API access and rate limits > Rate limits |
+| pro-api-limit | tier_specific | pro | answer | answer | high | 0.676 | 1 | API access and rate limits > Rate limits |
 | ent-end-contract | tier_specific | enterprise | answer | answer | high | 0.498 | 1 | Cancellation and downgrades > Ending an Enterprise contract |
 | ent-audit-export | tier_specific | enterprise | answer | answer | high | 0.705 | 1 | Data export and account deletion > Exporting audit logs |
 | weather | out_of_scope | pro | escalate | escalate | low | 0.104 | — | Refunds and billing > Refund limits by plan |

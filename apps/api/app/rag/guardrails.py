@@ -2,13 +2,15 @@
 
 Two layers, cheapest first:
 
-1. Similarity gate on the best cosine score from retrieval.
-   - below `low`: nothing relevant was found -> escalate, no LLM call
-   - at or above `high`: a clearly relevant passage was found -> answer
-   - in between: ask the judge
-2. Support judge (an LLM with structured output) for the middle band: does any
+1. Similarity gate on the best cosine score from retrieval: below `low`, nothing
+   relevant was found, so escalate with no LLM call.
+2. Support judge (an LLM with structured output) for everything else: does a
    retrieved passage explicitly contain the answer? Its cited ids are checked
    against what was actually retrieved, so it can't vouch for passages it invented.
+
+The judge runs even on strong matches. The agent writes its own search queries, and
+a keyword-dense rewrite of an undocumented question ("PayPal payment method for Pro
+plan") can score as high as a real match. `high` only sets the confidence shown.
 
 Thresholds come from `thresholds.yaml`, written by `scripts/run_evals.py --calibrate`
 from the labeled eval set (see evals/results.md), not from intuition.
@@ -60,7 +62,9 @@ class SupportVerdict(BaseModel):
 
 
 class SupportJudge(Protocol):
-    async def judge(self, question: str, chunks: Sequence[RetrievedChunk]) -> SupportVerdict: ...
+    async def judge(
+        self, question: str, chunks: Sequence[RetrievedChunk], *, tier: str | None = None
+    ) -> SupportVerdict: ...
 
 
 JUDGE_INSTRUCTIONS = """\
@@ -74,6 +78,7 @@ Rules:
 - A passage on the same topic that doesn't state the specific answer is NOT enough.
   Example: a passage about payment methods in general doesn't answer "Can I pay with PayPal?".
 - Questions unrelated to Acme Cloud are never answerable.
+- If the customer's plan is given, "my plan" means that plan.
 - `supporting_ids` lists only the passage ids that contain the answer; empty if not answerable.
 """
 
@@ -93,11 +98,14 @@ class OpenAISupportJudge:
         self.model = model
         self._reasoning: Reasoning | Omit = {"effort": reasoning_effort} if reasoning_effort else omit
 
-    async def judge(self, question: str, chunks: Sequence[RetrievedChunk]) -> SupportVerdict:
+    async def judge(
+        self, question: str, chunks: Sequence[RetrievedChunk], *, tier: str | None = None
+    ) -> SupportVerdict:
+        plan = f"Customer's plan: {tier.title()}\n" if tier else ""
         response = await self._client.responses.parse(
             model=self.model,
             instructions=JUDGE_INSTRUCTIONS,
-            input=f"Question: {question}\n\nPassages:\n\n{format_passages(chunks)}",
+            input=f"{plan}Question: {question}\n\nPassages:\n\n{format_passages(chunks)}",
             text_format=SupportVerdict,
             reasoning=self._reasoning,
         )
@@ -131,24 +139,20 @@ def _confidence(top_cosine: float, thresholds: Thresholds) -> float:
 
 
 def needs_judge(retrieval: RetrievalResult, thresholds: Thresholds) -> bool:
-    return bool(retrieval.chunks) and thresholds.band(retrieval.top_cosine) == "middle"
+    return bool(retrieval.chunks) and thresholds.band(retrieval.top_cosine) != "low"
 
 
 def decide(retrieval: RetrievalResult, thresholds: Thresholds, verdict: SupportVerdict | None) -> Assessment:
-    """Pure decision from retrieval scores and (for the middle band) a judge verdict.
-    Shared by the live path and the eval's offline threshold sweep."""
+    """Pure decision from retrieval scores and, above the low band, a judge verdict.
+    Shared by the live path and the eval's offline scoring."""
     top = retrieval.top_cosine
     band = thresholds.band(top)
     confidence = _confidence(top, thresholds)
 
     if band == "low" or not retrieval.chunks:
         return Assessment("escalate", band, top, confidence, "no relevant documentation found")
-    if band == "high":
-        ids = tuple(c.citation_id for c in retrieval.chunks[:3])
-        return Assessment("answer", band, top, confidence, "closely matching documentation", ids)
-
     if verdict is None:
-        raise ValueError("middle-band decisions need a judge verdict")
+        raise ValueError("decisions above the low band need a judge verdict")
     retrieved = {c.citation_id for c in retrieval.chunks}
     supported = tuple(i for i in verdict.supporting_ids if i in retrieved)
     if verdict.answerable and supported:
@@ -164,5 +168,9 @@ async def assess(
     judge: SupportJudge,
     thresholds: Thresholds,
 ) -> Assessment:
-    verdict = await judge.judge(question, retrieval.chunks) if needs_judge(retrieval, thresholds) else None
+    verdict = (
+        await judge.judge(question, retrieval.chunks, tier=retrieval.tier)
+        if needs_judge(retrieval, thresholds)
+        else None
+    )
     return decide(retrieval, thresholds, verdict)
