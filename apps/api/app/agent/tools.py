@@ -437,7 +437,7 @@ TOOLS: dict[str, ToolSpec] = {
             "Refund a charge. Refund rules are enforced by the system: it refuses anything outside "
             "policy and says whether a person could approve it.",
             IssueRefundArgs,
-            "Checking refund policy limits…",
+            "Checking policy limits and issuing the refund…",
             issue_refund,
             requires_verified=True,
             is_action=True,

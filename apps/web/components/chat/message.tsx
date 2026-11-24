@@ -29,7 +29,7 @@ export function Message({ turn, onRetry }: { turn: Turn; onRetry?: () => void })
   const grounded = turn.guardrail?.decision === "answer" && !turn.escalation;
 
   return (
-    <div className="max-w-[85%] rounded-2xl rounded-bl-sm border bg-card px-4 py-3 text-sm shadow-xs">
+    <div className="max-w-full rounded-2xl rounded-bl-sm sm:max-w-[85%] border bg-card px-4 py-3 text-sm shadow-xs">
       <StepList steps={turn.steps} />
       {waiting && <p className="text-muted-foreground">Thinking…</p>}
       {turn.text && <Answer text={turn.text} citations={turn.citations} streaming={streaming} />}

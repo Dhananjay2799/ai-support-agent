@@ -15,16 +15,16 @@ export function SupportApp() {
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-b">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3 sm:gap-3">
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
             A
           </div>
-          <h1 className="text-sm font-medium whitespace-nowrap">Acme Cloud Support</h1>
+          <h1 className="hidden text-sm font-medium whitespace-nowrap min-[480px]:block">Acme Cloud Support</h1>
           <Badge variant="outline" className="hidden sm:inline-flex">
             AI agent demo
           </Badge>
 
-          <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="ml-auto flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
             <span className="hidden sm:inline">Customer</span>
             <select
               value={persona.id}
@@ -32,7 +32,7 @@ export function SupportApp() {
                 setPersona(personaById(event.target.value));
                 setConversation((n) => n + 1);
               }}
-              className="h-8 rounded-lg border bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-8 min-w-0 rounded-lg border bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Demo customer"
             >
               {PERSONAS.map((p) => (
