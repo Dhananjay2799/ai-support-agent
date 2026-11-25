@@ -20,7 +20,7 @@ class _Event(BaseModel):
 StepStatus = Literal["started", "completed", "failed"]
 GuardrailDecision = Literal["answer", "verify", "escalate"]
 ErrorCode = Literal["llm_timeout", "rate_limited", "tool_failed", "budget_exceeded", "internal"]
-SpanKind = Literal["node", "llm", "tool", "retrieval", "voice"]
+SpanKind = Literal["node", "llm", "tool", "retrieval", "guardrail", "voice"]
 Priority = Literal["low", "normal", "high", "urgent"]
 
 
@@ -92,8 +92,11 @@ class CitationsEvent(_Event):
 
 
 class TraceEvent(_Event):
+    """Everything one turn did, as a tree of spans; sent just before `done`."""
+
     type: Literal["trace"] = "trace"
-    span: Span
+    turn_id: str
+    spans: list[Span]
 
 
 class ErrorEvent(_Event):
@@ -153,6 +156,12 @@ class VoiceEndedEvent(_Event):
     type: Literal["voice_ended"] = "voice_ended"
     reason: VoiceEndReason
     duration_ms: float
+    billed_seconds: float | None = Field(
+        default=None, description="Voice time GPT-Live billed, when it reported usage"
+    )
+    voice_cost_usd: float | None = Field(
+        default=None, description="Cost of the voice session itself; agent turns are priced separately"
+    )
 
 
 VoiceEvent = Annotated[

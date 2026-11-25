@@ -6,7 +6,8 @@ from typing import Protocol
 
 from openai import AsyncOpenAI
 
-from app.observability.usage import record
+from app.observability.tracing import span
+from app.observability.usage import cost_of, record
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 1536
@@ -31,8 +32,11 @@ class OpenAIEmbedder:
         vectors: list[Vector] = []
         for start in range(0, len(texts), self._batch_size):
             batch = list(texts[start : start + self._batch_size])
-            response = await self._client.embeddings.create(model=self.model, input=batch)
-            record(self.model, input_tokens=response.usage.total_tokens)
+            with span("embedding", "llm", model=self.model, texts=len(batch)) as trace:
+                response = await self._client.embeddings.create(model=self.model, input=batch)
+                tokens = response.usage.total_tokens
+                record(self.model, input_tokens=tokens)
+                trace.set(status="ok", input_tokens=tokens, cost_usd=round(cost_of(self.model, tokens), 8))
             vectors.extend(item.embedding for item in sorted(response.data, key=lambda d: d.index))
         return vectors
 

@@ -44,7 +44,12 @@ async def get_graph() -> Graph:
         policy=load_policy(),
         demo_mode=settings.demo_mode,
     )
-    responder = OpenAIResponder(client, settings.agent_model, settings.agent_reasoning_effort)
+    responder = OpenAIResponder(
+        client,
+        settings.agent_model,
+        settings.agent_reasoning_effort,
+        fallback_model=settings.agent_fallback_model,
+    )
     graph = build_graph(responder, env, AsyncPostgresSaver(pool))
     _cache.update(loop=loop, graph=graph)
     return graph

@@ -15,7 +15,9 @@ from app.agent import graph as graph_module
 from app.agent.graph import MAX_MODEL_CALLS, build_graph, run_turn
 from app.agent.llm import FunctionCall, Item, ModelTurn
 from app.agent.tools import ToolEnv
-from app.contracts import AgentEvent
+from app.contracts import AgentEvent, Span
+from app.observability.faults import Fault, FaultPlan, current_faults
+from app.observability.turn import TurnTelemetry
 from app.rag.guardrails import Thresholds
 
 Step = ModelTurn | Callable[[Sequence[Item]], ModelTurn]
@@ -181,3 +183,63 @@ async def test_tool_crash_is_reported_and_the_turn_still_finishes(
     failed = next(e for e in events if e.type == "step" and e.status == "failed")
     assert failed.detail == "temporarily unavailable"
     assert kinds(events)[-1] == "done"
+
+
+# --- traces and tool recovery ------------------------------------------------------------
+
+
+async def traced_turn(
+    env: ToolEnv, model: ScriptedModel, message: str, *, fault: Fault | None = None
+) -> tuple[list[Any], list[Span]]:
+    plan_token = current_faults.set(FaultPlan(fault) if fault else None)
+    try:
+        with TurnTelemetry(channel="text") as telemetry:
+            events = await turn(env, model, str(uuid.uuid4()), message, persona="priya")
+            done = next(e for e in events if e.type == "done")
+            return events, telemetry.trace(done.turn_id).spans
+    finally:
+        current_faults.reset(plan_token)
+
+
+async def test_tools_are_traced_under_the_turn(env: ToolEnv) -> None:
+    model = ScriptedModel(
+        calls(call("verify_customer", email=None, zip_code=None), call("get_account")), say("ok")
+    )
+    _, spans = await traced_turn(env, model, "what did you charge me?")
+
+    root = spans[0]
+    tools = [s for s in spans if s.kind == "tool"]
+    assert root.name == "turn"
+    assert [t.name for t in tools] == ["tool: verify_customer", "tool: get_account"]
+    assert all(t.parent_id == root.id and t.attributes["status"] == "completed" for t in tools)
+    assert tools[1].attributes["attempts"] == 1
+    assert "Pro plan, monthly" in str(tools[1].attributes["output"])  # the tool's result, for debugging
+
+
+async def test_a_transient_tool_error_is_retried_and_shown(env: ToolEnv) -> None:
+    model = ScriptedModel(call("verify_customer", email=None, zip_code=None), say("ok"))
+    events, spans = await traced_turn(env, model, "hi", fault="tool_error")
+
+    [step] = [e for e in events if e.type == "step" and e.status != "started"]
+    assert step.status == "completed" and step.detail.endswith("recovered after a retry")
+    [tool] = [s for s in spans if s.kind == "tool"]
+    failures = tool.attributes["failures"]
+    assert tool.attributes["attempts"] == 2
+    assert isinstance(failures, list) and "account database was lost" in str(failures[0])
+
+
+async def test_an_outage_is_reported_to_the_model_not_crashed(env: ToolEnv) -> None:
+    model = ScriptedModel(
+        call("verify_customer", email=None, zip_code=None),
+        call("get_account"),
+        say("Our billing system is down; let me get a specialist."),
+    )
+    events, spans = await traced_turn(env, model, "refund me", fault="tool_outage")
+
+    failed = [e for e in events if e.type == "step" and e.status == "failed"]
+    assert [(e.tool, e.detail) for e in failed] == [("get_account", "temporarily unavailable")]
+    [account] = [s for s in spans if s.name == "tool: get_account"]
+    failures = account.attributes["failures"]
+    assert isinstance(failures, list) and len(failures) == 2  # tried twice before giving up
+    assert "tool_unavailable" in str(account.attributes["output"])  # what the model was told
+    assert len(model.seen) == 3  # ...and it went on to answer

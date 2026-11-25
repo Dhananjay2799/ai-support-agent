@@ -7,8 +7,10 @@ import openai
 import pytest
 from fastapi.testclient import TestClient
 
-from app.contracts import AgentEvent, DoneEvent, StepEvent, TokenEvent, Usage, agent_event_adapter
+from app.contracts import AgentEvent, DoneEvent, StepEvent, TokenEvent, TraceEvent, Usage, agent_event_adapter
 from app.main import app
+from app.observability.faults import current_faults
+from app.observability.tracing import span
 
 
 def _parse_sse(body: str) -> list[AgentEvent]:
@@ -22,17 +24,30 @@ def _parse_sse(body: str) -> list[AgentEvent]:
 
 
 @pytest.fixture
-def fake_agent(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+def saved_traces(monkeypatch: pytest.MonkeyPatch) -> list[TraceEvent]:
+    saved: list[TraceEvent] = []
+
+    async def persist_trace(session_id: str, trace: TraceEvent) -> None:
+        saved.append(trace)
+
+    monkeypatch.setattr("app.routes.chat.persist_trace", persist_trace)
+    return saved
+
+
+@pytest.fixture
+def fake_agent(monkeypatch: pytest.MonkeyPatch, saved_traces: list[TraceEvent]) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
 
     async def get_graph() -> object:
         return object()
 
     async def run_turn(graph: object, **kwargs: Any) -> AsyncIterator[AgentEvent]:
-        calls.append(kwargs)
+        plan = current_faults.get()
+        calls.append({**kwargs, **({"simulated": plan.fault} if plan else {})})
         if kwargs["message"] == "boom":
             raise openai.RateLimitError("slow down", response=_fake_response(429), body=None)
-        yield StepEvent(id="s1", tool="verify_customer", label="Verifying…", status="started")
+        with span("tool: verify_customer", "tool"):
+            yield StepEvent(id="s1", tool="verify_customer", label="Verifying…", status="started")
         yield TokenEvent(text="Hello")
         yield DoneEvent(turn_id="t1", usage=Usage(), cost_usd=0, latency_ms=1)
 
@@ -47,15 +62,30 @@ def _fake_response(status: int) -> Any:
     return httpx.Response(status, request=httpx.Request("POST", "https://api.openai.com/v1/responses"))
 
 
-def test_chat_streams_agent_events(fake_agent: list[dict[str, Any]]) -> None:
+def test_chat_streams_agent_events(fake_agent: list[dict[str, Any]], saved_traces: list[TraceEvent]) -> None:
     session = str(uuid.uuid4())
     response = TestClient(app).post(
         "/chat", json={"session_id": session, "message": "hi", "persona_id": "priya"}
     )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
-    assert [e.type for e in _parse_sse(response.text)] == ["step", "token", "done"]
+    events = _parse_sse(response.text)
+    assert [e.type for e in events] == ["step", "token", "trace", "done"]
     assert fake_agent == [{"session_id": session, "message": "hi", "persona_id": "priya"}]
+
+    trace = events[2]
+    assert trace.type == "trace" and trace.turn_id == "t1"
+    root, tool = trace.spans
+    assert root.name == "turn" and root.attributes["channel"] == "text"
+    assert tool.parent_id == root.id  # spans nest under the turn
+    assert saved_traces == [trace]
+
+
+def test_a_simulated_failure_reaches_the_turn_in_demo_mode(fake_agent: list[dict[str, Any]]) -> None:
+    TestClient(app).post(
+        "/chat", json={"session_id": str(uuid.uuid4()), "message": "hi", "simulate": "rate_limit"}
+    )
+    assert fake_agent[0]["simulated"] == "rate_limit"
 
 
 def test_upstream_failure_becomes_a_retryable_error_and_still_ends_with_done(
@@ -63,7 +93,7 @@ def test_upstream_failure_becomes_a_retryable_error_and_still_ends_with_done(
 ) -> None:
     response = TestClient(app).post("/chat", json={"session_id": str(uuid.uuid4()), "message": "boom"})
     events = _parse_sse(response.text)
-    assert [e.type for e in events] == ["error", "done"]
+    assert [e.type for e in events] == ["error", "trace", "done"]
     error = events[0]
     assert error.type == "error" and error.code == "rate_limited" and error.retryable
 

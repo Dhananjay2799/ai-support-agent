@@ -26,7 +26,11 @@ describe("segmentAnswer", () => {
   });
 
   it("hides markers, including a half-streamed one, before citations arrive", () => {
-    const segments = segmentAnswer("Refunds take 5 to 10 days. [refunds-and-billing#5] Also [refunds-and", undefined, true);
+    const segments = segmentAnswer(
+      "Refunds take 5 to 10 days. [refunds-and-billing#5] Also [refunds-and",
+      undefined,
+      true,
+    );
     expect(segments).toEqual([{ kind: "text", text: "Refunds take 5 to 10 days. Also" }]);
   });
 

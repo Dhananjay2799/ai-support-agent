@@ -6,16 +6,29 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { Message } from "@/components/chat/message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { type Simulation, TraceDrawer } from "@/components/observability/trace-drawer";
 import { CallPanel } from "@/components/voice/call-panel";
 import { useVoiceCall } from "@/components/voice/use-voice-call";
 import { type AssistantTurn, type Turn, applyEvent, newAssistantTurn } from "@/lib/chat-state";
 import { ChatStreamError, streamChat } from "@/lib/chat-client";
-import type { AgentEvent } from "@/lib/generated/agent-events";
+import type { AgentEvent, VoiceEndedEvent } from "@/lib/generated/agent-events";
 import { type Persona, apiPersonaId } from "@/lib/personas";
 
 /** One conversation. Remount it (new `key`) to start over with a fresh session. */
-export function ChatPanel({ persona }: { persona: Persona }) {
+export function ChatPanel({
+  persona,
+  tracesOpen,
+  onTracesOpenChange,
+}: {
+  persona: Persona;
+  tracesOpen: boolean;
+  onTracesOpenChange: (open: boolean) => void;
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [simulate, setSimulate] = useState<Simulation | null>(null);
+  const [calls, setCalls] = useState<VoiceEndedEvent[]>([]);
+  // undefined: follow the latest turn; null: nothing expanded; otherwise the chosen turn
+  const [traceTurn, setTraceTurn] = useState<string | null | undefined>(undefined);
   const sessionRef = useRef<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,7 +75,14 @@ export function ChatPanel({ persona }: { persona: Persona }) {
     if (!id) return;
     updateAssistant(id, (turn) =>
       turn.status === "streaming"
-        ? { ...turn, status: "error", error: { message: "The call ended before this answer finished.", retryable: false } }
+        ? {
+            ...turn,
+            status: "error",
+            error: {
+              message: "The call ended before this answer finished.",
+              retryable: false,
+            },
+          }
         : turn,
     );
   }, [updateAssistant]);
@@ -72,6 +92,7 @@ export function ChatPanel({ persona }: { persona: Persona }) {
     onVoiceTurn,
     onAgentEvent: onVoiceAgentEvent,
     onCallClosed,
+    onCallEnded: useCallback((event: VoiceEndedEvent) => setCalls((all) => [...all, event]), []),
   });
   const onCall = call.state?.status === "connecting" || call.state?.status === "live";
 
@@ -88,12 +109,20 @@ export function ChatPanel({ persona }: { persona: Persona }) {
       ]);
       setDraft("");
       setBusy(true);
+      setTraceTurn(undefined);
+      const simulated = simulate;
+      setSimulate(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
       try {
         await streamChat(
-          { session_id: sessionId(), message, persona_id: apiPersonaId(persona) },
+          {
+            session_id: sessionId(),
+            message,
+            persona_id: apiPersonaId(persona),
+            simulate: simulated,
+          },
           {
             signal: controller.signal,
             onEvent: (event) => updateAssistant(assistantId, (turn) => applyEvent(turn, event)),
@@ -116,7 +145,7 @@ export function ChatPanel({ persona }: { persona: Persona }) {
         abortRef.current = null;
       }
     },
-    [busy, persona, sessionId, updateAssistant],
+    [busy, persona, sessionId, simulate, updateAssistant],
   );
 
   const retryLast = useCallback(() => {
@@ -129,84 +158,111 @@ export function ChatPanel({ persona }: { persona: Persona }) {
     void send(draft);
   };
 
+  const latestTraced = [...turns].reverse().find((t) => t.role === "assistant" && t.done)?.id ?? null;
+  const showTrace = (id: string) => {
+    setTraceTurn(id);
+    onTracesOpenChange(true);
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
-          {turns.length === 0 ? (
-            <div className="flex flex-col items-start gap-3 pt-12">
-              <h2 className="text-lg font-medium">How can we help?</h2>
-              <p className="text-sm text-muted-foreground">
-                Ask about billing, refunds, your plan, or account security.
-              </p>
-              <div className="flex w-full items-start gap-3 rounded-xl border bg-muted/30 p-3 text-xs">
-                <UserRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <div className="space-y-0.5">
-                  <p className="font-medium">
-                    {persona.id === "guest"
-                      ? "Not signed in"
-                      : `Signed in as ${persona.name} · ${persona.plan} · ${persona.status}`}
-                  </p>
-                  <p className="text-muted-foreground">{persona.scenario}</p>
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
+            {turns.length === 0 ? (
+              <div className="flex flex-col items-start gap-3 pt-12">
+                <h2 className="text-lg font-medium">How can we help?</h2>
+                <p className="text-sm text-muted-foreground">
+                  Ask about billing, refunds, your plan, or account security.
+                </p>
+                <div className="flex w-full items-start gap-3 rounded-xl border bg-muted/30 p-3 text-xs">
+                  <UserRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="space-y-0.5">
+                    <p className="font-medium">
+                      {persona.id === "guest"
+                        ? "Not signed in"
+                        : `Signed in as ${persona.name} · ${persona.plan} · ${persona.status}`}
+                    </p>
+                    <p className="text-muted-foreground">{persona.scenario}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {persona.suggestions.map((suggestion) => (
+                    <Button key={suggestion} variant="outline" size="sm" onClick={() => void send(suggestion)}>
+                      {suggestion}
+                    </Button>
+                  ))}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {persona.suggestions.map((suggestion) => (
-                  <Button key={suggestion} variant="outline" size="sm" onClick={() => void send(suggestion)}>
-                    {suggestion}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            turns.map((turn, index) => (
-              <Message
-                key={turn.id}
-                turn={turn}
-                onRetry={index === turns.length - 1 && !busy ? retryLast : undefined}
-              />
-            ))
-          )}
-          <div ref={endRef} />
+            ) : (
+              turns.map((turn, index) => (
+                <Message
+                  key={turn.id}
+                  turn={turn}
+                  onRetry={index === turns.length - 1 && !busy ? retryLast : undefined}
+                  onShowTrace={turn.role === "assistant" && turn.done ? () => showTrace(turn.id) : undefined}
+                />
+              ))
+            )}
+            <div ref={endRef} />
+          </div>
         </div>
+
+        <CallPanel call={call} onRetry={() => void call.start()} />
+
+        <form onSubmit={onSubmit} className="border-t bg-background">
+          <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
+            <Input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={onCall ? "On a call. Hang up to type." : "Message Acme Cloud support…"}
+              aria-label="Message"
+              maxLength={4000}
+              disabled={busy || onCall}
+            />
+            {!busy && (
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="Start a voice call"
+                title="Talk to the agent"
+                disabled={onCall}
+                onClick={() => void call.start()}
+              >
+                <Phone />
+              </Button>
+            )}
+            {busy ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="Stop"
+                onClick={() => abortRef.current?.abort()}
+              >
+                <Square />
+              </Button>
+            ) : (
+              <Button type="submit" size="icon" aria-label="Send" disabled={!draft.trim() || onCall}>
+                <ArrowUp />
+              </Button>
+            )}
+          </div>
+        </form>
       </div>
-
-      <CallPanel call={call} onRetry={() => void call.start()} />
-
-      <form onSubmit={onSubmit} className="border-t bg-background">
-        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
-          <Input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={onCall ? "On a call. Hang up to type." : "Message Acme Cloud support…"}
-            aria-label="Message"
-            maxLength={4000}
-            disabled={busy || onCall}
-          />
-          {!busy && (
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Start a voice call"
-              title="Talk to the agent"
-              disabled={onCall}
-              onClick={() => void call.start()}
-            >
-              <Phone />
-            </Button>
-          )}
-          {busy ? (
-            <Button type="button" size="icon" variant="outline" aria-label="Stop" onClick={() => abortRef.current?.abort()}>
-              <Square />
-            </Button>
-          ) : (
-            <Button type="submit" size="icon" aria-label="Send" disabled={!draft.trim() || onCall}>
-              <ArrowUp />
-            </Button>
-          )}
-        </div>
-      </form>
+      {tracesOpen && (
+        <TraceDrawer
+          turns={turns}
+          calls={calls}
+          selectedTurnId={traceTurn === undefined ? latestTraced : traceTurn}
+          onSelectTurn={setTraceTurn}
+          simulate={simulate}
+          onSimulate={setSimulate}
+          simulateDisabled={busy || onCall}
+          onClose={() => onTracesOpenChange(false)}
+        />
+      )}
     </div>
   );
 }

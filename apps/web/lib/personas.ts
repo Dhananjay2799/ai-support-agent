@@ -35,7 +35,10 @@ export const PERSONAS: Persona[] = [
     plan: "Enterprise",
     status: "active",
     scenario: "Wants a $1,200 charge refunded, over the $500 automatic limit.",
-    suggestions: ["Please refund the $1,200 seat expansion charge from last week.", "What's our support response time?"],
+    suggestions: [
+      "Please refund the $1,200 seat expansion charge from last week.",
+      "What's our support response time?",
+    ],
   },
   {
     id: "tom",

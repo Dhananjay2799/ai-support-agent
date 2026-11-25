@@ -21,14 +21,24 @@ import contextlib
 import logging
 import re
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from app.agent.errors import error_event
-from app.contracts import AgentEvent, DoneEvent, VoiceEndedEvent, VoiceEndReason, VoiceEvent, VoiceTurnEvent
-from app.observability.usage import UsageMeter, current_meter
-from app.voice.session import MAX_CALL_SECONDS
+from app.contracts import (
+    AgentEvent,
+    DoneEvent,
+    TraceEvent,
+    VoiceEndedEvent,
+    VoiceEndReason,
+    VoiceEvent,
+    VoiceTurnEvent,
+)
+from app.observability.tracing import span
+from app.observability.turn import TurnTelemetry
+from app.observability.usage import live_cost
+from app.voice.session import LIVE_MODEL, MAX_CALL_SECONDS
 
 log = logging.getLogger(__name__)
 
@@ -92,6 +102,7 @@ class VoiceBridge:
     transcript_wait_s: float = TRANSCRIPT_WAIT_S
     transcript_quiet_s: float = TRANSCRIPT_QUIET_S
     finish_turn_s: float = FINISH_TURN_S
+    on_trace: Callable[[TraceEvent], Awaitable[None]] | None = None  # e.g. save it
 
     _words: list[Word] = field(default_factory=list)
     _taken_until_ms: int = -1  # words starting before this belong to an earlier request
@@ -102,6 +113,7 @@ class VoiceBridge:
     _closed: bool = False
     _in_turn: bool = False
     _reason: VoiceEndReason | None = None
+    _usage: Any = None  # GPT-Live's final usage, from session.closed
 
     async def events(self) -> AsyncIterator[VoiceEvent]:
         """Yield the call's events until the session closes and any turn in flight is done."""
@@ -129,9 +141,7 @@ class VoiceBridge:
             if not reader.cancelled() and reader.exception() is not None:
                 log.error("voice session connection failed", exc_info=reader.exception())
                 self._reason = "error"
-            yield VoiceEndedEvent(
-                reason=self._reason or "hangup", duration_ms=round((time.monotonic() - started) * 1000, 1)
-            )
+            yield self._ended(time.monotonic() - started)
         finally:
             for task in (reader, worker, timer):
                 task.cancel()
@@ -154,6 +164,7 @@ class VoiceBridge:
             elif kind == "error":
                 log.warning("GPT-Live error event: %s", getattr(event, "error", event))
             elif kind == "session.closed":
+                self._usage = getattr(event, "usage", None)
                 return
 
     async def _time_limit(self) -> None:
@@ -167,20 +178,26 @@ class VoiceBridge:
             if self._closed:
                 return
             delegation_id = delegation.id
-            utterance = await self._take_utterance(delegation.offset_ms)
-            log.info("delegation %s at %d ms: %r", delegation_id, delegation.offset_ms, utterance[:160])
-            if not utterance:
-                await self._speak(delegation_id, DIDNT_CATCH)
-                continue
-            if self._closed:
-                return
-            self._in_turn = True
-            try:
-                self._out.put_nowait(VoiceTurnEvent(utterance=utterance))
-                answer = await self._run(delegation_id, utterance)
-            finally:
-                self._in_turn = False
-                self._out.put_nowait(_IDLE)
+            with TurnTelemetry(channel="voice", delegation_id=delegation_id) as telemetry:
+                with span("waiting for the transcript", "voice", offset_ms=delegation.offset_ms) as wait:
+                    utterance = await self._take_utterance(delegation.offset_ms)
+                    wait.set(utterance=utterance)
+                log.info("delegation %s at %d ms: %r", delegation_id, delegation.offset_ms, utterance[:160])
+                if not utterance:
+                    await self._speak(delegation_id, DIDNT_CATCH)
+                    continue
+                if self._closed:
+                    return
+                telemetry.annotate(message=utterance)
+                self._in_turn = True
+                try:
+                    self._out.put_nowait(VoiceTurnEvent(utterance=utterance))
+                    answer, trace = await self._run(delegation_id, utterance, telemetry)
+                finally:
+                    self._in_turn = False
+                    self._out.put_nowait(_IDLE)
+            if self.on_trace is not None:
+                await self.on_trace(trace)
             if self._closed:
                 return  # nobody left to say it to; the answer is in the conversation
             if self._delegations.empty():
@@ -251,14 +268,19 @@ class VoiceBridge:
             end = word.end_ms
         return False
 
-    async def _run(self, delegation_id: str, utterance: str) -> str:
-        """One agent turn; streams its events and returns the text to speak."""
-        meter = UsageMeter()
-        token = current_meter.set(meter)
+    async def _run(
+        self, delegation_id: str, utterance: str, telemetry: TurnTelemetry
+    ) -> tuple[str, TraceEvent]:
+        """One agent turn; streams its events (its trace just before `done`) and returns
+        the text to speak and the trace."""
         started = time.time()
         text: list[str] = []
+        trace: TraceEvent | None = None
         try:
             async for event in self.run_turn(utterance):
+                if event.type == "done":
+                    trace = telemetry.trace(event.turn_id)
+                    self._out.put_nowait(trace)
                 self._out.put_nowait(event)
                 if event.type == "token":
                     text.append(event.text)
@@ -275,19 +297,36 @@ class VoiceBridge:
         except Exception as error:
             log.exception("voice turn failed")
             self._out.put_nowait(error_event(error))
-            self._out.put_nowait(
-                DoneEvent(
-                    turn_id=f"failed-{delegation_id}",
-                    usage=meter.usage(),
-                    cost_usd=round(meter.cost_usd, 6),
-                    latency_ms=round((time.time() - started) * 1000, 1),
-                )
+            done = DoneEvent(
+                turn_id=f"failed-{delegation_id}",
+                usage=telemetry.meter.usage(),
+                cost_usd=round(telemetry.meter.cost_usd, 6),
+                latency_ms=round((time.time() - started) * 1000, 1),
             )
-            return FAILED
-        finally:
-            with contextlib.suppress(ValueError):
-                current_meter.reset(token)
-        return speakable("".join(text)) or FAILED
+            trace = telemetry.trace(done.turn_id)
+            self._out.put_nowait(trace)
+            self._out.put_nowait(done)
+            return FAILED, trace
+        if trace is None:  # the graph always ends with done; this is just a safety net
+            trace = telemetry.trace(f"voice-{delegation_id}")
+        return speakable("".join(text)) or FAILED, trace
+
+    def _ended(self, seconds: float) -> VoiceEndedEvent:
+        usage = self._usage
+        billed: float | None = getattr(usage, "seconds", None)
+        cost: float | None = None
+        if billed is not None:
+            standby = float(getattr(usage, "paused_seconds", None) or 0)
+            active = getattr(usage, "active_seconds", None)
+            cost = round(
+                live_cost(LIVE_MODEL, float(active) if active is not None else billed - standby, standby), 6
+            )
+        return VoiceEndedEvent(
+            reason=self._reason or "hangup",
+            duration_ms=round(seconds * 1000, 1),
+            billed_seconds=billed,
+            voice_cost_usd=cost,
+        )
 
     async def _speak(self, delegation_id: str, content: str) -> None:
         await self._send(

@@ -15,6 +15,7 @@ which is what gives chat and voice one shared memory: a voice call runs each spo
 request through this same graph, on the same thread.
 """
 
+import asyncio
 import json
 import operator
 import re
@@ -24,6 +25,7 @@ from collections.abc import AsyncIterator
 from dataclasses import replace
 from typing import Annotated, Any, Literal, TypedDict, cast
 
+import psycopg
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.config import get_stream_writer
@@ -44,9 +46,14 @@ from app.agent.tools import (
     tool_schemas,
 )
 from app.contracts import AgentEvent, Citation, CitationsEvent, DoneEvent, StepEvent, TokenEvent, Usage
+from app.observability.faults import tool_failure
+from app.observability.tracing import clip, span
 from app.observability.usage import current_meter
 
 MAX_MODEL_CALLS = 8
+TOOL_ATTEMPTS = 2
+TOOL_RETRY_DELAY_S = 0.3
+TRANSIENT_TOOL_ERRORS = (psycopg.OperationalError, TimeoutError)
 Channel = Literal["text", "voice"]
 CITATION = re.compile(r"\[([a-z0-9-]+#\d+)\]")
 
@@ -72,6 +79,13 @@ class AgentState(TypedDict, total=False):
 
 def _emit(event: AgentEvent) -> None:
     get_stream_writer()(event)
+
+
+def _arguments(raw: str) -> Any:
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return clip(raw, 600)
 
 
 def _session(state: AgentState) -> ToolSession:
@@ -134,6 +148,35 @@ def build_graph(
             "pending_calls": [vars(call) for call in turn.calls],
         }
 
+    async def _run_tool_with_retry(call: FunctionCall, session: ToolSession) -> tuple[ToolOutcome, list[str]]:
+        """Run a tool; retry once after a transient infrastructure error.
+
+        Retrying is safe for every tool: refunds are idempotent per charge, ticket creation
+        returns the open ticket, and lookups have no side effects. If the tool still fails,
+        the model is told it's unavailable instead of the turn crashing.
+        """
+        failures: list[str] = []
+        for attempt in range(1, TOOL_ATTEMPTS + 1):
+            try:
+                if injected := tool_failure(call.name):
+                    raise injected
+                return await run_tool(call.name, call.arguments, env, session), failures
+            except TRANSIENT_TOOL_ERRORS as error:
+                failures.append(clip(f"attempt {attempt}: {type(error).__name__}: {error}", 300))
+                if attempt < TOOL_ATTEMPTS:
+                    await asyncio.sleep(TOOL_RETRY_DELAY_S)
+            except Exception as error:  # a bug or bad data: retrying won't help
+                failures.append(clip(f"attempt {attempt}: {type(error).__name__}: {error}", 300))
+                break
+        return (
+            ToolOutcome(
+                output={"error": "tool_unavailable", "next": "Apologize and offer a specialist."},
+                status="failed",
+                detail="temporarily unavailable",
+            ),
+            failures,
+        )
+
     async def tools(state: AgentState) -> dict[str, Any]:
         session = _session(state)
         searches = list(state.get("turn_searches", []))
@@ -148,14 +191,19 @@ def build_graph(
             step_id = call.call_id[-12:]
             _emit(StepEvent(id=step_id, tool=call.name, label=label, status="started"))
             started = time.perf_counter()
-            try:
-                outcome = await run_tool(call.name, call.arguments, env, session)
-            except Exception:  # infrastructure failure: tell the model, don't crash the turn
-                outcome = ToolOutcome(
-                    output={"error": "tool_unavailable", "next": "Apologize and offer a specialist."},
-                    status="failed",
-                    detail="temporarily unavailable",
+            with span(
+                f"tool: {call.name}", "tool", tool=call.name, arguments=_arguments(call.arguments)
+            ) as trace:
+                outcome, failures = await _run_tool_with_retry(call, session)
+                trace.set(
+                    status=outcome.status,
+                    detail=outcome.detail,
+                    output=clip(json.dumps(outcome.output), 1_500),
+                    attempts=len(failures) + (outcome.status != "failed"),
+                    **({"failures": failures} if failures else {}),
                 )
+            if failures and outcome.status != "failed":
+                outcome = replace(outcome, detail=f"{outcome.detail or 'done'} · recovered after a retry")
             _emit(
                 StepEvent(
                     id=step_id,
@@ -217,12 +265,16 @@ def build_graph(
             spec = TOOLS["create_escalation_ticket"]
             _emit(StepEvent(id=call_id, tool=spec.name, label=spec.label, status="started"))
             started = time.perf_counter()
-            outcome = await run_tool(
-                spec.name,
-                json.dumps({"category": category, "priority": "normal", "summary": summary}),
-                env,
-                _session(state),
-            )
+            arguments = json.dumps({"category": category, "priority": "normal", "summary": summary})
+            with span("escalate", "node", reason=reason, arguments=_arguments(arguments)) as trace:
+                outcome, failures = await _run_tool_with_retry(
+                    FunctionCall(call_id=call_id, name=spec.name, arguments=arguments), _session(state)
+                )
+                trace.set(
+                    status=outcome.status,
+                    detail=outcome.detail,
+                    **({"failures": failures} if failures else {}),
+                )
             _emit(
                 StepEvent(
                     id=call_id,
@@ -260,6 +312,10 @@ def build_graph(
                 )
         if cited:
             _emit(CitationsEvent(citations=cited))
+        dropped = sorted(set(CITATION.findall(state.get("turn_text", ""))) - {c.id for c in cited})
+        if dropped:  # the model cited passages it was never shown this turn
+            with span("citation check", "guardrail", kept=[c.id for c in cited], dropped=dropped):
+                pass
 
         meter = current_meter.get()
         _emit(

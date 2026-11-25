@@ -9,7 +9,9 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "gen:types": "json2ts -i ../../contracts/agent-events.schema.json -o lib/generated/agent-events.ts --unreachableDefinitions --no-additionalProperties --bannerComment \"/* Generated from contracts/agent-events.schema.json by npm run gen:types. Do not edit. */\""
+    "gen:types": "json2ts -i ../../contracts/agent-events.schema.json -o lib/generated/agent-events.ts --unreachableDefinitions --no-additionalProperties --bannerComment \"/* Generated from contracts/agent-events.schema.json by npm run gen:types. Do not edit. */\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -30,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "json-schema-to-typescript": "^16.0.0",
+    "prettier": "^3.10.1",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
     "vitest": "^5.1.1"

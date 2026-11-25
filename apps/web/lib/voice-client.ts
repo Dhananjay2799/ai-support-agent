@@ -126,7 +126,8 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
       body: JSON.stringify({ ...request, sdp: pc.localDescription?.sdp ?? "" } satisfies VoiceRequest),
       signal: abort.signal,
     });
-    if (!response.ok || !response.body) throw new CallError(`The voice service returned ${response.status}.`, "network");
+    if (!response.ok || !response.body)
+      throw new CallError(`The voice service returned ${response.status}.`, "network");
     void pump(response.body, pc, handlers, () => ended || hungUp, fail).finally(() => {
       if (!ended) cleanup();
       handlers.onClosed();

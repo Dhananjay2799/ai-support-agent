@@ -1,4 +1,4 @@
-import { Mic, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Activity, Mic, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 
 import { Answer } from "@/components/chat/answer";
 import { EscalationCard } from "@/components/chat/escalation-card";
@@ -13,7 +13,15 @@ function confidenceLabel(confidence: number): string {
   return "Low confidence";
 }
 
-export function Message({ turn, onRetry }: { turn: Turn; onRetry?: () => void }) {
+export function Message({
+  turn,
+  onRetry,
+  onShowTrace,
+}: {
+  turn: Turn;
+  onRetry?: () => void;
+  onShowTrace?: () => void;
+}) {
   if (turn.role === "user") {
     return (
       <div className="flex justify-end">
@@ -62,9 +70,16 @@ export function Message({ turn, onRetry }: { turn: Turn; onRetry?: () => void })
               {confidenceLabel(turn.guardrail.confidence)}
             </Badge>
           )}
-          <span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">
+          <button
+            type="button"
+            onClick={onShowTrace}
+            disabled={!onShowTrace}
+            title="Show this turn's trace"
+            className="ml-auto flex items-center gap-1 rounded font-mono text-[11px] text-muted-foreground tabular-nums hover:text-foreground disabled:hover:text-muted-foreground"
+          >
             {(turn.done.latency_ms / 1000).toFixed(1)} s · ${turn.done.cost_usd.toFixed(4)}
-          </span>
+            {onShowTrace && <Activity className="size-3" aria-hidden />}
+          </button>
         </div>
       )}
     </div>

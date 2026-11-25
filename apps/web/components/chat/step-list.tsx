@@ -26,9 +26,7 @@ export function StepList({ steps }: { steps: Step[] }) {
             <span className="mt-px">{ICONS[step.status]}</span>
             <span className="min-w-0">
               {step.status === "failed" ? `${label} failed` : label}
-              {step.detail && step.status !== "started" && (
-                <span className="text-foreground/80"> · {step.detail}</span>
-              )}
+              {step.detail && step.status !== "started" && <span className="text-foreground/80"> · {step.detail}</span>}
             </span>
             {step.durationMs !== null && (
               <span className="ml-auto shrink-0 pl-2 font-mono tabular-nums">{Math.round(step.durationMs)} ms</span>

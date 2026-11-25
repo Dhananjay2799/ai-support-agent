@@ -12,10 +12,11 @@ from app.agent import runtime
 from app.agent.errors import error_event
 from app.agent.graph import run_turn
 from app.config import get_settings
-from app.contracts import AgentEvent, VoiceEndedEvent, VoiceEvent, VoiceRequest, VoiceSessionEvent
+from app.contracts import AgentEvent, TraceEvent, VoiceEndedEvent, VoiceEvent, VoiceRequest, VoiceSessionEvent
 from app.data.repo import customer_for_persona
 from app.db import get_pool
 from app.llm.client import get_openai
+from app.observability.turn import persist_trace
 from app.voice.bridge import VoiceBridge
 from app.voice.session import MAX_CALL_SECONDS, history_from_items, session_config
 
@@ -86,7 +87,11 @@ async def voice(request: VoiceRequest) -> AsyncIterable[ServerSentEvent]:
             )
 
         async with client.live.sideband.connect(session_id=live_id) as link:
-            async for event in VoiceBridge(link, turn).events():
+
+            async def save(trace: TraceEvent) -> None:
+                await persist_trace(session_id, trace)
+
+            async for event in VoiceBridge(link, turn, on_trace=save).events():
                 yield sse(event)
         ended = True
         log.info("voice call %s ended", live_id)

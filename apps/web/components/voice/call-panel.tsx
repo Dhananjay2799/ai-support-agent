@@ -75,7 +75,11 @@ export function CallPanel({ call, onRetry }: { call: VoiceCall; onRetry: () => v
           <span
             className={cn(
               "size-2 rounded-full",
-              state.status === "live" ? "animate-pulse bg-emerald-500" : state.status === "failed" ? "bg-destructive" : "bg-muted-foreground/50",
+              state.status === "live"
+                ? "animate-pulse bg-emerald-500"
+                : state.status === "failed"
+                  ? "bg-destructive"
+                  : "bg-muted-foreground/50",
             )}
             aria-hidden
           />
@@ -84,7 +88,10 @@ export function CallPanel({ call, onRetry }: { call: VoiceCall; onRetry: () => v
           </span>
           {live && secondsLeft !== null && (
             <span
-              className={cn("ml-auto font-mono tabular-nums text-muted-foreground", secondsLeft < 30 && "text-amber-600")}
+              className={cn(
+                "ml-auto font-mono tabular-nums text-muted-foreground",
+                secondsLeft < 30 && "text-amber-600",
+              )}
               title="Demo calls are capped at 3 minutes"
             >
               {clock(secondsLeft)} left
@@ -97,7 +104,12 @@ export function CallPanel({ call, onRetry }: { call: VoiceCall; onRetry: () => v
         {captions.length > 0 && (
           <ol className="space-y-1 text-sm" aria-label="Live captions" aria-live="polite">
             {captions.map((caption) => (
-              <li key={caption.id} className={cn(caption.speaker === "caller" ? "text-emerald-700 dark:text-emerald-400" : "text-foreground")}>
+              <li
+                key={caption.id}
+                className={cn(
+                  caption.speaker === "caller" ? "text-emerald-700 dark:text-emerald-400" : "text-foreground",
+                )}
+              >
                 <span className="mr-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                   {caption.speaker === "caller" ? "You" : "Agent"}
                 </span>

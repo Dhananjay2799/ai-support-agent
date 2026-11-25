@@ -22,6 +22,23 @@ PRICES: dict[str, tuple[float, float, float]] = {
 }
 
 
+# GPT-Live voice sessions are billed by duration: USD per minute (active, standby).
+LIVE_PRICES: dict[str, tuple[float, float]] = {"gpt-live-1.1": (0.05, 0.02), "gpt-live-1": (0.05, 0.02)}
+
+
+def cost_of(model: str, input_tokens: int, cached_tokens: int = 0, output_tokens: int = 0) -> float:
+    price = PRICES.get(model)
+    if not price:
+        return 0.0
+    fresh = max(input_tokens - cached_tokens, 0)
+    return (fresh * price[0] + cached_tokens * price[1] + output_tokens * price[2]) / 1e6
+
+
+def live_cost(model: str, active_seconds: float, standby_seconds: float = 0.0) -> float:
+    active, standby = LIVE_PRICES.get(model, (0.0, 0.0))
+    return (active_seconds * active + standby_seconds * standby) / 60
+
+
 @dataclass
 class UsageMeter:
     input_tokens: int = 0
@@ -35,10 +52,7 @@ class UsageMeter:
         self.output_tokens += output_tokens
         self.cached_tokens += cached_tokens
         self.calls.append((model, input_tokens, cached_tokens, output_tokens))
-        price = PRICES.get(model)
-        if price:
-            fresh = max(input_tokens - cached_tokens, 0)
-            self.cost_usd += (fresh * price[0] + cached_tokens * price[1] + output_tokens * price[2]) / 1e6
+        self.cost_usd += cost_of(model, input_tokens, cached_tokens, output_tokens)
 
     def usage(self) -> Usage:
         return Usage(

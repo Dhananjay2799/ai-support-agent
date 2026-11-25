@@ -242,6 +242,7 @@
             "llm",
             "tool",
             "retrieval",
+            "guardrail",
             "voice"
           ],
           "type": "string"
@@ -364,19 +365,27 @@
     },
     "TraceEvent": {
       "additionalProperties": false,
+      "description": "Everything one turn did, as a tree of spans; sent just before `done`.",
       "properties": {
         "type": {
           "const": "trace",
           "default": "trace",
           "type": "string"
         },
-        "span": {
-          "$ref": "#/definitions/Span"
+        "turn_id": {
+          "type": "string"
+        },
+        "spans": {
+          "items": {
+            "$ref": "#/definitions/Span"
+          },
+          "type": "array"
         }
       },
       "required": [
         "type",
-        "span"
+        "turn_id",
+        "spans"
       ],
       "title": "TraceEvent",
       "type": "object"
@@ -427,12 +436,38 @@
         },
         "duration_ms": {
           "type": "number"
+        },
+        "billed_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Voice time GPT-Live billed, when it reported usage"
+        },
+        "voice_cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cost of the voice session itself; agent turns are priced separately"
         }
       },
       "required": [
         "type",
         "reason",
-        "duration_ms"
+        "duration_ms",
+        "billed_seconds",
+        "voice_cost_usd"
       ],
       "title": "VoiceEndedEvent",
       "type": "object"
@@ -606,6 +641,24 @@
           ],
           "default": null,
           "description": "Demo persona acting as the signed-in customer"
+        },
+        "simulate": {
+          "anyOf": [
+            {
+              "enum": [
+                "llm_timeout",
+                "rate_limit",
+                "tool_error",
+                "tool_outage"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Demo only: inject one failure into this turn to show how it's recovered"
         }
       },
       "required": [

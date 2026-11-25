@@ -27,7 +27,8 @@ from openai import AsyncOpenAI, Omit, omit
 from openai.types.shared_params import Reasoning
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.observability.usage import record
+from app.observability.tracing import clip, span
+from app.observability.usage import cost_of, record
 from app.rag.retriever import RetrievalResult, RetrievedChunk
 
 THRESHOLDS_PATH = Path(__file__).with_name("thresholds.yaml")
@@ -106,24 +107,35 @@ class OpenAISupportJudge:
         self, question: str, chunks: Sequence[RetrievedChunk], *, tier: str | None = None
     ) -> SupportVerdict:
         plan = f"Customer's plan: {tier.title()}\n" if tier else ""
-        response = await self._client.responses.parse(
-            model=self.model,
-            instructions=JUDGE_INSTRUCTIONS,
-            input=f"{plan}Question: {question}\n\nPassages:\n\n{format_passages(chunks)}",
-            text_format=SupportVerdict,
-            reasoning=self._reasoning,
-        )
-        if response.usage:
-            record(
-                self.model,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                cached_tokens=response.usage.input_tokens_details.cached_tokens,
+        with span(
+            "support judge", "llm", model=self.model, question=clip(question, 500), passages=len(chunks)
+        ) as trace:
+            response = await self._client.responses.parse(
+                model=self.model,
+                instructions=JUDGE_INSTRUCTIONS,
+                input=f"{plan}Question: {question}\n\nPassages:\n\n{format_passages(chunks)}",
+                text_format=SupportVerdict,
+                reasoning=self._reasoning,
             )
-        verdict = response.output_parsed
-        if verdict is None:
-            raise RuntimeError("support judge returned no structured output")
-        return verdict
+            if usage := response.usage:
+                cached = usage.input_tokens_details.cached_tokens
+                record(
+                    self.model,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    cached_tokens=cached,
+                )
+                trace.set(
+                    input_tokens=usage.input_tokens,
+                    cached_tokens=cached,
+                    output_tokens=usage.output_tokens,
+                    cost_usd=round(cost_of(self.model, usage.input_tokens, cached, usage.output_tokens), 6),
+                )
+            verdict = response.output_parsed
+            if verdict is None:
+                raise RuntimeError("support judge returned no structured output")
+            trace.set(status="ok", verdict=verdict.model_dump(mode="json"))
+            return verdict
 
 
 @dataclass(frozen=True)
@@ -172,9 +184,21 @@ async def assess(
     judge: SupportJudge,
     thresholds: Thresholds,
 ) -> Assessment:
-    verdict = (
-        await judge.judge(question, retrieval.chunks, tier=retrieval.tier)
-        if needs_judge(retrieval, thresholds)
-        else None
-    )
-    return decide(retrieval, thresholds, verdict)
+    with span(
+        "confidence check", "guardrail", thresholds={"low": thresholds.low, "high": thresholds.high}
+    ) as trace:
+        verdict = (
+            await judge.judge(question, retrieval.chunks, tier=retrieval.tier)
+            if needs_judge(retrieval, thresholds)
+            else None
+        )
+        assessment = decide(retrieval, thresholds, verdict)
+        trace.set(
+            best_cosine=round(assessment.top_cosine, 3),
+            band=assessment.band,
+            decision=assessment.decision,
+            confidence=assessment.confidence,
+            reason=assessment.reason,
+            supporting=list(assessment.supporting_ids),
+        )
+        return assessment

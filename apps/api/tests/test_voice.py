@@ -13,6 +13,7 @@ from app.contracts import (
     DoneEvent,
     StepEvent,
     TokenEvent,
+    TraceEvent,
     Usage,
     VoiceEvent,
     voice_event_adapter,
@@ -54,8 +55,8 @@ class FakeLink:
             )
         )
 
-    def close(self) -> None:
-        self.incoming.put_nowait(SimpleNamespace(type="session.closed"))
+    def close(self, usage: Any = None) -> None:
+        self.incoming.put_nowait(SimpleNamespace(type="session.closed", usage=usage))
 
     def spoken(self) -> list[tuple[str, str]]:
         return [
@@ -115,7 +116,7 @@ async def test_a_spoken_request_runs_the_agent_and_its_answer_is_spoken() -> Non
     link.close()
     events = await call
 
-    assert [e.type for e in events] == ["voice_turn", "step", "step", "token", "done", "voice_ended"]
+    assert [e.type for e in events] == ["voice_turn", "step", "step", "token", "trace", "done", "voice_ended"]
     assert events[0].type == "voice_turn" and events[0].utterance == "I was charged twice."
     # Spoken without the citation marker; the browser still gets the marked-up text.
     assert link.spoken() == [("d1", "You heard: I was charged twice.")]
@@ -245,7 +246,7 @@ async def test_a_failed_turn_is_reported_and_the_caller_hears_an_apology() -> No
     link.close()
     events = await call
 
-    assert [e.type for e in events] == ["voice_turn", "error", "done", "voice_ended"]
+    assert [e.type for e in events] == ["voice_turn", "error", "trace", "done", "voice_ended"]
     assert link.spoken() == [("d1", FAILED)]
 
 
@@ -263,7 +264,7 @@ async def test_hanging_up_mid_turn_still_finishes_the_turn() -> None:
     gate.set()
     events = await call
 
-    assert [e.type for e in events] == ["voice_turn", "step", "step", "token", "done", "voice_ended"]
+    assert [e.type for e in events] == ["voice_turn", "step", "step", "token", "trace", "done", "voice_ended"]
     assert link.spoken() == []  # nobody left to hear it; the answer is in the conversation
 
 
@@ -275,6 +276,29 @@ async def test_the_call_is_closed_at_the_time_limit() -> None:
     events = await call
 
     assert events[-1].type == "voice_ended" and events[-1].reason == "time_limit"
+
+
+async def test_each_voice_turn_is_traced_and_the_call_reports_its_voice_cost() -> None:
+    link = FakeLink()
+    traces: list[TraceEvent] = []
+
+    async def save(trace: TraceEvent) -> None:
+        traces.append(trace)
+
+    call = await run_call(bridge_for(link, answer_with("ok"), on_trace=save))
+    link.heard("What's my plan?", 1000, 2000)
+    link.delegate("d1", 2000)
+    await until(lambda: bool(link.spoken()))
+    link.close(usage=SimpleNamespace(seconds=60.0, active_seconds=50, paused_seconds=10))
+    events = await call
+
+    [trace] = traces
+    root, wait = trace.spans[0], trace.spans[1]
+    assert root.attributes["channel"] == "voice" and root.attributes["message"] == "What's my plan?"
+    assert wait.name == "waiting for the transcript" and wait.parent_id == root.id
+    ended = events[-1]
+    assert ended.type == "voice_ended" and ended.billed_seconds == 60.0
+    assert ended.voice_cost_usd == pytest.approx(50 / 60 * 0.05 + 10 / 60 * 0.02)
 
 
 def test_speakable_drops_citations_and_caps_length() -> None:

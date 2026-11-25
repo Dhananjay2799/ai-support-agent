@@ -6,6 +6,7 @@ import type {
   EscalationEvent,
   GuardrailEvent,
   StepEvent,
+  TraceEvent,
 } from "@/lib/generated/agent-events";
 
 export interface Step {
@@ -34,6 +35,7 @@ export interface AssistantTurn {
   guardrail?: GuardrailEvent;
   escalation?: EscalationEvent;
   citations?: Citation[];
+  trace?: TraceEvent;
   error?: Pick<ErrorEvent, "message" | "retryable">;
   done?: DoneEvent;
 }
@@ -76,6 +78,6 @@ export function applyEvent(turn: AssistantTurn, event: AgentEvent): AssistantTur
     case "done":
       return { ...turn, status: turn.status === "error" ? "error" : "done", done: event };
     case "trace":
-      return turn; // consumed by the observability drawer (Day 5)
+      return { ...turn, trace: event };
   }
 }

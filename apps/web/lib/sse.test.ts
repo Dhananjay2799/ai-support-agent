@@ -11,7 +11,7 @@ describe("SSEParser", () => {
 
   it("handles messages split across arbitrary chunk boundaries", () => {
     const parser = new SSEParser();
-    const wire = "event: step\ndata: {\"a\":1}\n\nevent: done\ndata: {\"b\":2}\n\n";
+    const wire = 'event: step\ndata: {"a":1}\n\nevent: done\ndata: {"b":2}\n\n';
     const out = [...wire].flatMap((char) => parser.feed(char));
     expect(out.map((m) => m.event)).toEqual(["step", "done"]);
     expect(out[1].data).toBe('{"b":2}');

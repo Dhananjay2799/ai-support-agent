@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AgentEvent } from "@/lib/generated/agent-events";
+import type { AgentEvent, VoiceEndedEvent } from "@/lib/generated/agent-events";
 import { type Call, CallError, startCall } from "@/lib/voice-client";
 import { applyLiveEvent, type CallState, INITIAL_CALL } from "@/lib/voice-state";
 
@@ -15,6 +15,8 @@ export interface VoiceCallOptions {
   onAgentEvent: (event: AgentEvent) => boolean;
   /** The call's stream is over; a voice turn still in progress won't get more events. */
   onCallClosed: () => void;
+  /** The call ended, with its duration and voice cost. */
+  onCallEnded?: (event: VoiceEndedEvent) => void;
 }
 
 export interface VoiceCall {
@@ -33,15 +35,16 @@ export function useVoiceCall({
   onVoiceTurn,
   onAgentEvent,
   onCallClosed,
+  onCallEnded,
 }: VoiceCallOptions): VoiceCall {
   const [state, setState] = useState<CallState | null>(null);
   const [mic, setMic] = useState<MediaStream | null>(null);
   const [agent, setAgent] = useState<MediaStream | null>(null);
   const callRef = useRef<Call | null>(null);
-  const handlers = useRef({ onVoiceTurn, onAgentEvent, onCallClosed });
+  const handlers = useRef({ onVoiceTurn, onAgentEvent, onCallClosed, onCallEnded });
   useEffect(() => {
-    handlers.current = { onVoiceTurn, onAgentEvent, onCallClosed };
-  }, [onVoiceTurn, onAgentEvent, onCallClosed]);
+    handlers.current = { onVoiceTurn, onAgentEvent, onCallClosed, onCallEnded };
+  }, [onVoiceTurn, onAgentEvent, onCallClosed, onCallEnded]);
 
   const update = useCallback((change: (state: CallState) => CallState) => {
     setState((current) => (current ? change(current) : current));
@@ -71,6 +74,7 @@ export function useVoiceCall({
                 handlers.current.onVoiceTurn(event.utterance);
                 break;
               case "voice_ended":
+                handlers.current.onCallEnded?.(event);
                 update((s) => ({
                   ...s,
                   status: s.status === "failed" ? "failed" : "ended",
@@ -87,7 +91,11 @@ export function useVoiceCall({
       setMic(call.mic);
       void call.agent.then(setAgent);
     } catch (error) {
-      setState({ ...INITIAL_CALL, status: "failed", error: error instanceof CallError ? error.message : "Couldn't start the call." });
+      setState({
+        ...INITIAL_CALL,
+        status: "failed",
+        error: error instanceof CallError ? error.message : "Couldn't start the call.",
+      });
     }
   }, [sessionId, personaId, update, fail]);
 

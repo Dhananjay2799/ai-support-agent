@@ -1,6 +1,9 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+SimulatedFailure = Literal["llm_timeout", "rate_limit", "tool_error", "tool_outage"]
 
 
 class ChatRequest(BaseModel):
@@ -12,6 +15,10 @@ class ChatRequest(BaseModel):
         default=None,
         max_length=64,
         description="Demo persona acting as the signed-in customer",
+    )
+    simulate: SimulatedFailure | None = Field(
+        default=None,
+        description="Demo only: inject one failure into this turn to show how it's recovered",
     )
 
 

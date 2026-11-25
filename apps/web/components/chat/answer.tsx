@@ -4,19 +4,9 @@ import { segmentAnswer } from "@/lib/citations";
 import type { Citation } from "@/lib/generated/agent-events";
 
 /** Answer text with numbered citation markers, followed by the cited sources. */
-export function Answer({
-  text,
-  citations,
-  streaming,
-}: {
-  text: string;
-  citations?: Citation[];
-  streaming: boolean;
-}) {
+export function Answer({ text, citations, streaming }: { text: string; citations?: Citation[]; streaming: boolean }) {
   const segments = segmentAnswer(text, citations, streaming);
-  const cited = new Map(
-    segments.flatMap((s) => (s.kind === "cite" ? [[s.n, s.citation] as const] : [])),
-  );
+  const cited = new Map(segments.flatMap((s) => (s.kind === "cite" ? [[s.n, s.citation] as const] : [])));
 
   return (
     <>

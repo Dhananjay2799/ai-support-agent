@@ -116,12 +116,15 @@ export interface Citation {
   section: string;
 }
 /**
+ * Everything one turn did, as a tree of spans; sent just before `done`.
+ *
  * This interface was referenced by `Contracts`'s JSON-Schema
  * via the `definition` "TraceEvent".
  */
 export interface TraceEvent {
   type: "trace";
-  span: Span;
+  turn_id: string;
+  spans: Span[];
 }
 /**
  * This interface was referenced by `Contracts`'s JSON-Schema
@@ -131,7 +134,7 @@ export interface Span {
   id: string;
   parent_id: string | null;
   name: string;
-  kind: "node" | "llm" | "tool" | "retrieval" | "voice";
+  kind: "node" | "llm" | "tool" | "retrieval" | "guardrail" | "voice";
   /**
    * Milliseconds since the turn started
    */
@@ -209,6 +212,14 @@ export interface VoiceEndedEvent {
   type: "voice_ended";
   reason: "hangup" | "time_limit" | "closed" | "error";
   duration_ms: number;
+  /**
+   * Voice time GPT-Live billed, when it reported usage
+   */
+  billed_seconds: number | null;
+  /**
+   * Cost of the voice session itself; agent turns are priced separately
+   */
+  voice_cost_usd: number | null;
 }
 /**
  * This interface was referenced by `Contracts`'s JSON-Schema
@@ -224,6 +235,10 @@ export interface ChatRequest {
    * Demo persona acting as the signed-in customer
    */
   persona_id?: string | null;
+  /**
+   * Demo only: inject one failure into this turn to show how it's recovered
+   */
+  simulate?: ("llm_timeout" | "rate_limit" | "tool_error" | "tool_outage") | null;
 }
 /**
  * This interface was referenced by `Contracts`'s JSON-Schema

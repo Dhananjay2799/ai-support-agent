@@ -1,6 +1,6 @@
 "use client";
 
-import { SquarePen } from "lucide-react";
+import { Activity, SquarePen } from "lucide-react";
 import { useState } from "react";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -11,11 +11,12 @@ import { DEFAULT_PERSONA, PERSONAS, personaById } from "@/lib/personas";
 export function SupportApp() {
   const [persona, setPersona] = useState(DEFAULT_PERSONA);
   const [conversation, setConversation] = useState(0);
+  const [tracesOpen, setTracesOpen] = useState(false);
 
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-b">
-        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3 sm:gap-3">
+        <div className="flex items-center gap-2 px-4 py-3 sm:gap-3 lg:px-6">
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
             A
           </div>
@@ -42,6 +43,17 @@ export function SupportApp() {
               ))}
             </select>
           </label>
+          <Button
+            variant={tracesOpen ? "secondary" : "outline"}
+            size="sm"
+            aria-pressed={tracesOpen}
+            title="Traces, latency, tokens and cost"
+            onClick={() => setTracesOpen((open) => !open)}
+          >
+            <Activity data-icon="inline-start" />
+            <span className="hidden sm:inline">Traces</span>
+            <span className="sr-only sm:hidden">Traces</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setConversation((n) => n + 1)}>
             <SquarePen data-icon="inline-start" />
             <span className="hidden sm:inline">New conversation</span>
@@ -49,7 +61,12 @@ export function SupportApp() {
           </Button>
         </div>
       </header>
-      <ChatPanel key={`${persona.id}:${conversation}`} persona={persona} />
+      <ChatPanel
+        key={`${persona.id}:${conversation}`}
+        persona={persona}
+        tracesOpen={tracesOpen}
+        onTracesOpenChange={setTracesOpen}
+      />
     </div>
   );
 }

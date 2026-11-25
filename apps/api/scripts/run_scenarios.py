@@ -165,7 +165,12 @@ def local_graph(pool: AsyncConnectionPool[Any]) -> Graph:
         demo_mode=True,
     )
     return build_graph(
-        OpenAIResponder(client, settings.agent_model, settings.agent_reasoning_effort),
+        OpenAIResponder(
+            client,
+            settings.agent_model,
+            settings.agent_reasoning_effort,
+            fallback_model=settings.agent_fallback_model,
+        ),
         env,
         AsyncPostgresSaver(pool),
     )

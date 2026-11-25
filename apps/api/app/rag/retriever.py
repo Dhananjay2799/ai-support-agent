@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from psycopg import AsyncConnection
 from psycopg.rows import DictRow
 
+from app.observability.tracing import clip, span
 from app.rag.embeddings import Embedder, to_pgvector
 
 RRF_K = 60  # standard constant from the original RRF paper
@@ -125,8 +126,24 @@ class HybridRetriever:
     async def search(
         self, conn: AsyncConnection[DictRow], question: str, *, tier: str | None
     ) -> RetrievalResult:
-        [embedding] = await self._embedder.embed([question])
-        return await self.search_with_embedding(conn, question, embedding, tier=tier)
+        with span("hybrid search", "retrieval", query=clip(question, 500), tier=tier) as trace:
+            [embedding] = await self._embedder.embed([question])
+            result = await self.search_with_embedding(conn, question, embedding, tier=tier)
+            trace.set(
+                best_cosine=result.best_cosine,
+                chunks=[
+                    {
+                        "id": c.citation_id,
+                        "section": c.section_path,
+                        "cosine": round(c.cosine, 3),
+                        "semantic_rank": c.semantic_rank,
+                        "lexical_rank": c.lexical_rank,
+                        "rrf": round(c.rrf_score, 4),
+                    }
+                    for c in result.chunks[:6]
+                ],
+            )
+            return result
 
     async def search_with_embedding(
         self,

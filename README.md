@@ -4,10 +4,11 @@ A customer support agent for **Acme Cloud** (a fictional file-sync SaaS) that an
 chat and live voice, chains tool calls to verify customers and act on their accounts, grounds every
 answer in a policy knowledge base, and hands low-confidence cases to a human.
 
-> **Status: Day 4 of 7.** Text and voice share one agent and one memory. The agent verifies the
+> **Status: Day 5 of 7.** Text and voice share one agent and one memory. The agent verifies the
 > customer, reads their account, checks policy and refunds or escalates, with citations and a
 > ticket card; 9 end-to-end scenarios pass against the deployed API. Calls run on GPT-Live with
-> live captions, a waveform and interruptions. The observability drawer lands next.
+> live captions, a waveform and interruptions. Every turn is traced (prompts, latency, tokens,
+> cost) in an observability drawer, and failures are recovered visibly.
 
 ## Architecture
 
@@ -69,9 +70,9 @@ in the same session, picks up the verified customer and the conversation.
 $5,000 refund, and the engine refused it (`exceeds charge`). Citations are checked against the
 passages actually retrieved that turn, and made-up ones are dropped before they reach the UI.
 
-**Failure handling.** A crashing tool is reported to the model as unavailable and the turn still
-finishes. More than 8 model calls in a turn hands over to a person. LLM timeouts, rate limits and
-database outages end the stream with a typed, retryable error instead of a hung spinner.
+**Failure handling.** See [Error recovery](#error-recovery): retries, a fallback model and
+graceful tool failures, each visible in the turn's trace. More than 8 model calls in a turn hands
+over to a person.
 
 **Scenarios** (`apps/api/scripts/run_scenarios.py`, real model, against the deployed API; results
 in `evals/agent_scenarios.md`):
@@ -161,6 +162,57 @@ synthesized speech (over WebSocket, since WebRTC needs UDP): a chat turn first, 
 a chat turn after the call that knows about the refund. The voice acknowledges within half a
 second of the caller finishing; a full refund answer is ready about 5 s later.
 
+## Observability
+
+Press **Traces** in the header, or the latency and cost under any reply. Each turn, typed or spoken,
+is a tree of spans:
+
+```text
+turn                                   text · 6 model calls · $0.00045
+├─ model call      gpt-6-luna · 1040 → 23 tok   prompt, output, TTFT, cached tokens, cost
+├─ tool: verify_customer                Priya Shah · Pro · active
+├─ tool: search_policies                high confidence · 4 passages
+│  ├─ hybrid search                     query, top passages with cosine and both ranks
+│  │  └─ embedding                      text-embedding-3-small · 10 tokens
+│  └─ confidence check                  band, decision, reason
+│     └─ support judge                  verdict, supporting passage ids
+├─ tool: issue_refund                   $29.00 refunded · re_…
+└─ model call      gpt-6-luna            the answer
+```
+
+A `Tracer` rides along with the turn in a context variable, like the usage meter, so the model
+client, tools, retrieval and judge each open their own span without being handed anything, and
+spans nest by context. The whole trace is streamed just before the turn's `done` event, saved to
+the `traces` table, and readable again at `GET /sessions/{session_id}/traces`. A model call span
+holds the exact instructions and input it was given (long fields clipped), its output and tool
+calls, token counts including cached and reasoning tokens, time to first token and cost. Voice
+turns add a span for waiting on the transcript, and a call reports the seconds GPT-Live billed
+and their cost ($0.05 per active minute, $0.02 on standby).
+
+The drawer adds up the session: cost (agent and voice), turns, latency, tokens, model calls and
+recoveries, and shows each turn as a waterfall; click any span for its details.
+
+## Error recovery
+
+Recovery is explicit, so it can be seen and tested rather than happening inside an SDK:
+
+| Failure | What happens | Where it shows |
+| --- | --- | --- |
+| Model timeout, dropped connection, 5xx | One retry after a short backoff | A failed `model call` span (`timed out → retry`), then a good one |
+| Rate limit (429) | Retry honoring `Retry-After`, then `gpt-5.4-mini` as a fallback | Two failed spans, then the fallback model's |
+| Transient database error in a tool | The tool is retried once (safe: refunds are idempotent, tickets dedupe) | The step reads "recovered after a retry" |
+| A tool keeps failing | The model is told it's unavailable; it apologizes and hands over | Failed step, a ticket, attempts in the span |
+| Anything else mid-turn | A typed, retryable `error` event, then `done`, never a hung stream | Retry button on the reply |
+
+A call that has already streamed text is never retried, since the customer would see words twice.
+The fallback model doesn't get the main model's encrypted reasoning, which only replays on the
+model that produced it.
+
+**Show it on demand.** In demo mode the drawer can inject one failure into the next message: a
+model timeout, a rate limit, a database blip or an account-system outage. It goes through the
+same recovery code as a real failure (`app/observability/faults.py`), and each path has a test
+and passes against the real model.
+
 ## Repository layout
 
 ```text
@@ -169,6 +221,7 @@ apps/api/            FastAPI service
   app/routes/        HTTP endpoints (chat and voice SSE, health, token-protected KB ingest)
   app/agent/         LangGraph agent: graph, tools, prompts, Responses API client
   app/voice/         GPT-Live session setup and the delegation bridge
+  app/observability/ Tracing, usage and cost, demo failure injection
   app/data/          CRM queries: customers, charges, idempotent refunds, tickets
   app/policy/        policy.yaml and the refund policy engine
   app/rag/           chunking, ingestion, hybrid retrieval, guardrails, thresholds.yaml
@@ -178,6 +231,7 @@ apps/web/            Next.js 16 UI
   lib/sse.ts         Incremental SSE parser for POST streams
   components/chat/   Chat panel, steps, cited answers, escalation card, customer switcher
   components/voice/  Call panel, waveform, call hook
+  components/observability/ Trace drawer, span details
 contracts/           JSON Schema exported from the Pydantic models
 kb/                  Acme Cloud policy and troubleshooting docs (RAG source)
 evals/               labeled questions and the latest results
