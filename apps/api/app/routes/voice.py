@@ -4,7 +4,7 @@ from collections.abc import AsyncIterable, AsyncIterator
 from typing import Any
 
 import anyio
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from langchain_core.runnables import RunnableConfig
 
@@ -12,9 +12,18 @@ from app.agent import runtime
 from app.agent.errors import error_event
 from app.agent.graph import run_turn
 from app.config import get_settings
-from app.contracts import AgentEvent, TraceEvent, VoiceEndedEvent, VoiceEvent, VoiceRequest, VoiceSessionEvent
+from app.contracts import (
+    AgentEvent,
+    Span,
+    TraceEvent,
+    VoiceEndedEvent,
+    VoiceEvent,
+    VoiceRequest,
+    VoiceSessionEvent,
+)
 from app.data.repo import customer_for_persona
 from app.db import get_pool
+from app.limits import limit_voice
 from app.llm.client import get_openai
 from app.observability.turn import persist_trace
 from app.voice.bridge import VoiceBridge
@@ -22,6 +31,29 @@ from app.voice.session import MAX_CALL_SECONDS, history_from_items, session_conf
 
 router = APIRouter(tags=["voice"])
 log = logging.getLogger(__name__)
+
+
+def call_trace(live_id: str, ended: VoiceEndedEvent) -> TraceEvent:
+    """One root span per call with its voice cost, so the daily budget counts voice too.
+    (The agent turns of the call are traced, and priced, on their own.)"""
+    return TraceEvent(
+        turn_id=f"call-{live_id}",
+        spans=[
+            Span(
+                id=live_id[-12:],
+                name="voice call",
+                kind="voice",
+                start_ms=0,
+                end_ms=ended.duration_ms,
+                attributes={
+                    "live_session_id": live_id,
+                    "reason": ended.reason,
+                    "billed_seconds": ended.billed_seconds,
+                    "cost_usd": ended.voice_cost_usd or 0.0,
+                },
+            )
+        ],
+    )
 
 
 async def _caller_first_name(values: dict[str, Any], persona: str | None) -> str | None:
@@ -36,7 +68,7 @@ async def _caller_first_name(values: dict[str, Any], persona: str | None) -> str
     return None
 
 
-@router.post("/voice", response_class=EventSourceResponse)
+@router.post("/voice", response_class=EventSourceResponse, dependencies=[Depends(limit_voice)])
 async def voice(request: VoiceRequest) -> AsyncIterable[ServerSentEvent]:
     """Run one voice call as Server-Sent Events.
 
@@ -92,6 +124,8 @@ async def voice(request: VoiceRequest) -> AsyncIterable[ServerSentEvent]:
                 await persist_trace(session_id, trace)
 
             async for event in VoiceBridge(link, turn, on_trace=save).events():
+                if event.type == "voice_ended":
+                    await persist_trace(session_id, call_trace(live_id, event))
                 yield sse(event)
         ended = True
         log.info("voice call %s ended", live_id)

@@ -1,4 +1,5 @@
 import type { AgentEvent, ChatRequest } from "@/lib/generated/agent-events";
+import { errorDetail } from "@/lib/http";
 import { SSEParser } from "@/lib/sse";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
@@ -55,12 +56,17 @@ export async function streamChat(
     throw new ChatStreamError("Can't reach the support service.", "network");
   }
 
-  if (response.status === 429) {
+  if (response.status === 429 || response.status === 503) {
+    // Rate limit or the demo's daily budget: the server says why and for how long.
     const retryAfter = Number(response.headers.get("Retry-After") ?? "0") || undefined;
-    throw new ChatStreamError("Too many messages. Please wait a moment.", "rate_limited", retryAfter);
+    const detail = await errorDetail(response);
+    throw new ChatStreamError(detail ?? "Too many messages. Please wait a moment.", "rate_limited", retryAfter);
   }
   if (!response.ok || !response.body) {
-    throw new ChatStreamError(`The support service returned ${response.status}.`, "http");
+    throw new ChatStreamError(
+      (await errorDetail(response)) ?? `The support service returned ${response.status}.`,
+      "http",
+    );
   }
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();

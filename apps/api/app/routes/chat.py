@@ -6,7 +6,7 @@ from collections.abc import AsyncIterable
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from app.agent import runtime
@@ -15,6 +15,7 @@ from app.agent.graph import run_turn
 from app.config import get_settings
 from app.contracts import AgentEvent, ChatRequest, DoneEvent, TraceEvent
 from app.db import get_pool
+from app.limits import limit_chat
 from app.observability.faults import FaultPlan, current_faults
 from app.observability.turn import TurnTelemetry, load_traces, persist_trace
 
@@ -22,7 +23,7 @@ router = APIRouter(tags=["chat"])
 log = logging.getLogger(__name__)
 
 
-@router.post("/chat", response_class=EventSourceResponse)
+@router.post("/chat", response_class=EventSourceResponse, dependencies=[Depends(limit_chat)])
 async def chat(request: ChatRequest) -> AsyncIterable[ServerSentEvent]:
     """Stream one agent turn as Server-Sent Events.
 

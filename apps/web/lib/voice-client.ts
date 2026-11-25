@@ -1,5 +1,6 @@
 import { API_URL } from "@/lib/chat-client";
 import type { VoiceEvent, VoiceRequest } from "@/lib/generated/agent-events";
+import { errorDetail } from "@/lib/http";
 import { SSEParser } from "@/lib/sse";
 import type { LiveEvent } from "@/lib/voice-state";
 
@@ -126,8 +127,9 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
       body: JSON.stringify({ ...request, sdp: pc.localDescription?.sdp ?? "" } satisfies VoiceRequest),
       signal: abort.signal,
     });
-    if (!response.ok || !response.body)
-      throw new CallError(`The voice service returned ${response.status}.`, "network");
+    if (!response.ok || !response.body) {
+      throw new CallError((await errorDetail(response)) ?? `The voice service returned ${response.status}.`, "network");
+    }
     void pump(response.body, pc, handlers, () => ended || hungUp, fail).finally(() => {
       if (!ended) cleanup();
       handlers.onClosed();

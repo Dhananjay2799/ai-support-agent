@@ -4,6 +4,7 @@ import { Activity, SquarePen } from "lucide-react";
 import { useState } from "react";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
+import { ResetDemoButton } from "@/components/chat/reset-demo-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_PERSONA, PERSONAS, personaById } from "@/lib/personas";
@@ -54,6 +55,7 @@ export function SupportApp() {
             <span className="hidden sm:inline">Traces</span>
             <span className="sr-only sm:hidden">Traces</span>
           </Button>
+          <ResetDemoButton onReset={() => setConversation((n) => n + 1)} />
           <Button variant="outline" size="sm" onClick={() => setConversation((n) => n + 1)}>
             <SquarePen data-icon="inline-start" />
             <span className="hidden sm:inline">New conversation</span>

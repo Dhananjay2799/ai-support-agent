@@ -6,6 +6,11 @@ Without it, database tests are skipped.
 """
 
 import os
+
+# Route tests run without the Postgres-backed rate limiter; tests/test_limits.py covers it.
+os.environ.setdefault("RATE_LIMITS_ENABLED", "false")
+
+import os
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any
