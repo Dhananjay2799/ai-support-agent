@@ -6,7 +6,7 @@ answer in a policy knowledge base, and hands low-confidence cases to a human.
 
 > **Status: Day 5 of 7.** Text and voice share one agent and one memory. The agent verifies the
 > customer, reads their account, checks policy and refunds or escalates, with citations and a
-> ticket card; 9 end-to-end scenarios pass against the deployed API. Calls run on GPT-Live with
+> ticket card; 10 end-to-end scenarios pass against the deployed API. Calls run on GPT-Live with
 > live captions, a waveform and interruptions. Every turn is traced (prompts, latency, tokens,
 > cost) in an observability drawer, and failures are recovered visibly.
 
@@ -67,7 +67,10 @@ in the same session, picks up the verified customer and the conversation.
 
 **The model proposes, code decides.** Refund limits, windows and eligibility are enforced in
 `app/policy/engine.py`, not in the prompt. In the prompt-injection scenario the model did try a
-$5,000 refund, and the engine refused it (`exceeds charge`). Citations are checked against the
+$5,000 refund, and the engine refused it (`exceeds charge`). Testing on the live site turned up
+one rule that lived only in the docs: asked again in a new conversation, the agent refunded the
+original charge of an already-refunded duplicate pair. The engine now enforces "keep the
+original" itself: a second refund on a duplicate pair goes to a person. Citations are checked against the
 passages actually retrieved that turn, and made-up ones are dropped before they reach the UI.
 
 **Failure handling.** See [Error recovery](#error-recovery): retries, a fallback model and
@@ -80,6 +83,7 @@ in `evals/agent_scenarios.md`):
 | Customer | Asks | Outcome |
 | --- | --- | --- |
 | Priya (Pro) | "I was charged twice this month" | Verify, account, policy, $29 refunded, all in one turn |
+| Priya, again | The same, in a new conversation | No second refund: the original charge is kept |
 | Marcus (Free) | Refund for a storage add-on | Declined with the cited Free-plan rule |
 | Elena (Enterprise) | Refund $1,200 | Engine blocks it (over the $500 limit), high-priority ticket, 4-hour SLA |
 | Tom (Pro, past due) | Refund last month's charge | Declined: account must be in good standing |
