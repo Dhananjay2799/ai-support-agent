@@ -189,3 +189,11 @@ async def create_ticket(
     row = await cur.fetchone()
     assert row is not None
     return TicketRow(**row)
+
+
+async def add_to_ticket(conn: Conn, public_id: str, note: str) -> None:
+    """Append a follow-up to an open ticket, so a second hand-off isn't lost."""
+    await conn.execute(
+        "update public.tickets set summary = summary || %s where public_id = %s",
+        (f"\n\nFollow-up: {note}", public_id),
+    )

@@ -77,9 +77,26 @@ def agent_instructions(
     return AGENT_RULES + style + "\nContext:\n" + "\n".join(f"- {line}" for line in context)
 
 
-def escalation_message(reason: str, escalation: Escalation) -> str:
+def escalation_message(reason: str, escalation: Escalation, *, added: bool = False) -> str:
+    """What to say after a hand-off. `added` means the ticket was already open and this request
+    was appended to it, so never claim a new ticket."""
     ticket = escalation["ticket_id"]
     hours = escalation["first_response_hours"]
+    if added:
+        if reason == "low_confidence":
+            return (
+                "I couldn't find a documented answer to that, so rather than guess I've added your "
+                f"question to your open ticket {ticket}. You'll hear back within {hours} hours."
+            )
+        if reason == "verification_failed":
+            return (
+                "I wasn't able to verify your identity, so for your security I've paused account help "
+                f"and noted it on your open ticket {ticket}."
+            )
+        return (
+            "This is taking longer than it should, so I've added it to your open ticket "
+            f"{ticket}. You'll hear back within {hours} hours."
+        )
     if reason == "verification_failed":
         return (
             "I wasn't able to verify your identity, so for your security I've paused account help "

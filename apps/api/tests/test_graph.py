@@ -162,6 +162,33 @@ async def test_undocumented_question_is_escalated_without_a_model_answer(env: To
     assert ticket is not None and ticket["category"] == "low_confidence"
 
 
+async def test_a_second_undocumented_question_is_added_to_the_open_ticket(env: ToolEnv) -> None:
+    strict = replace(env, thresholds=Thresholds(low=0.99, high=1.0))
+    session = str(uuid.uuid4())
+    first = ScriptedModel(call("search_policies", query="can I pay with paypal"))
+    opened = next(
+        e for e in await turn(strict, first, session, "PayPal?", persona=None) if e.type == "escalation"
+    )
+
+    second = ScriptedModel(call("search_policies", query="do you support apple pay"))
+    events = await turn(strict, second, session, "Apple Pay?", persona=None)
+
+    assert not any(e.type == "escalation" for e in events)  # no second ticket card
+    step = next(
+        e
+        for e in events
+        if e.type == "step" and e.status == "completed" and e.tool == "create_escalation_ticket"
+    )
+    assert step.detail == f"added to {opened.ticket_id}"
+    text = "".join(e.text for e in events if e.type == "token")
+    assert f"added your question to your open ticket {opened.ticket_id}" in text
+    async with env.pool.connection() as conn:
+        rows = await (await conn.execute("select summary from public.tickets")).fetchall()
+    assert len(rows) == 1 and rows[0]["summary"].endswith(
+        "Follow-up: No documented answer for: do you support apple pay"
+    )
+
+
 async def test_step_cap_hands_over_to_a_person(env: ToolEnv) -> None:
     looping = ScriptedModel(*[call("search_policies", query=f"attempt {i}") for i in range(MAX_MODEL_CALLS)])
     events = await turn(env, looping, str(uuid.uuid4()), "help", persona=None)

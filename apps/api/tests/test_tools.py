@@ -153,6 +153,10 @@ async def test_no_account_actions_after_escalation(env: ToolEnv) -> None:
         env, escalated, "create_escalation_ticket", category="other", priority="low", summary="x"
     )
     assert again.output["already_open"] and again.output["ticket_id"] == ticket.output["ticket_id"]
+    assert again.output["added_to_ticket"] and again.detail == f"added to {ticket.output['ticket_id']}"
+    async with env.pool.connection() as conn:
+        tickets = await (await conn.execute("select summary from public.tickets")).fetchall()
+    assert [t["summary"] for t in tickets] == ["Wants a person.\n\nFollow-up: x"]
 
 
 async def test_search_answers_with_citable_passages(env: ToolEnv) -> None:

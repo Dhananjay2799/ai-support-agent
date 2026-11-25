@@ -250,49 +250,59 @@ def build_graph(
 
     async def escalate(state: AgentState) -> dict[str, Any]:
         reason = state.get("force_escalation") or "other"
-        escalation = state.get("escalation")
+        existing = state.get("escalation")
+        escalation = existing
+        added = False
         updates: dict[str, Any] = {"force_escalation": None}
-        if escalation is None:
-            searches = state.get("turn_searches", [])
-            summary = (
-                f"No documented answer for: {searches[-1]['query']}"
-                if reason == "low_confidence" and searches
-                else f"Agent could not finish the request ({reason})."
-            )
-            category = "low_confidence" if reason == "low_confidence" else "other"
+        # A new ticket, or, if one is already open, this request appended to it.
+        searches = state.get("turn_searches", [])
+        summary = (
+            f"No documented answer for: {searches[-1]['query']}"
+            if reason == "low_confidence" and searches
+            else f"Agent could not finish the request ({reason})."
+        )
+        category = "low_confidence" if reason == "low_confidence" else "other"
 
-            call_id = f"escalate_{uuid.uuid4().hex[:8]}"
-            spec = TOOLS["create_escalation_ticket"]
-            _emit(StepEvent(id=call_id, tool=spec.name, label=spec.label, status="started"))
-            started = time.perf_counter()
-            arguments = json.dumps({"category": category, "priority": "normal", "summary": summary})
-            with span("escalate", "node", reason=reason, arguments=_arguments(arguments)) as trace:
-                outcome, failures = await _run_tool_with_retry(
-                    FunctionCall(call_id=call_id, name=spec.name, arguments=arguments), _session(state)
-                )
-                trace.set(
-                    status=outcome.status,
-                    detail=outcome.detail,
-                    **({"failures": failures} if failures else {}),
-                )
-            _emit(
-                StepEvent(
-                    id=call_id,
-                    tool=spec.name,
-                    label=spec.label,
-                    status=outcome.status,
-                    duration_ms=round((time.perf_counter() - started) * 1000, 1),
-                    detail=outcome.detail,
-                )
+        call_id = f"escalate_{uuid.uuid4().hex[:8]}"
+        spec = TOOLS["create_escalation_ticket"]
+        _emit(StepEvent(id=call_id, tool=spec.name, label=spec.label, status="started"))
+        started = time.perf_counter()
+        arguments = json.dumps({"category": category, "priority": "normal", "summary": summary})
+        with span("escalate", "node", reason=reason, arguments=_arguments(arguments)) as trace:
+            outcome, failures = await _run_tool_with_retry(
+                FunctionCall(call_id=call_id, name=spec.name, arguments=arguments), _session(state)
             )
-            for event in outcome.events:
-                _emit(event)
+            trace.set(
+                status=outcome.status,
+                detail=outcome.detail,
+                **({"failures": failures} if failures else {}),
+            )
+        _emit(
+            StepEvent(
+                id=call_id,
+                tool=spec.name,
+                label=spec.label,
+                status=outcome.status,
+                duration_ms=round((time.perf_counter() - started) * 1000, 1),
+                detail=outcome.detail,
+            )
+        )
+        for event in outcome.events:
+            _emit(event)
+        if existing is None:
             escalation = outcome.updates.get("escalation")
             updates["escalation"] = escalation
+        else:
+            added = outcome.status == "completed"
         if escalation is None:  # ticket creation failed too: still never leave silence
             message = "I'm having trouble right now. Please try again in a moment."
+        elif existing is not None and not added:  # couldn't append: don't claim we did
+            message = (
+                f"Your ticket {existing['ticket_id']} is still open with a specialist, and you'll hear "
+                f"back within {existing['first_response_hours']} hours."
+            )
         else:
-            message = escalation_message(reason, escalation)
+            message = escalation_message(reason, escalation, added=added)
         separator = "\n\n" if state.get("turn_text") else ""
         _emit(TokenEvent(text=separator + message))
         return {

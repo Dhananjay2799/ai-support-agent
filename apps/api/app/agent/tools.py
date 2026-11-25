@@ -374,9 +374,12 @@ def _refunded(refund: repo.RefundRow, charge_id: str, *, created: bool) -> ToolO
 
 async def create_escalation_ticket(env: ToolEnv, s: ToolSession, args: CreateTicketArgs) -> ToolOutcome:
     if s.escalation:
+        ticket_id = s.escalation["ticket_id"]
+        async with env.pool.connection() as conn:
+            await repo.add_to_ticket(conn, ticket_id, args.summary)
         return ToolOutcome(
-            output={"ticket_id": s.escalation["ticket_id"], "already_open": True},
-            detail=f"{s.escalation['ticket_id']} already open",
+            output={"ticket_id": ticket_id, "already_open": True, "added_to_ticket": True},
+            detail=f"added to {ticket_id}",
         )
     escalation, event = await _open_ticket(env, s, args.category, args.priority, args.summary)
     return ToolOutcome(
