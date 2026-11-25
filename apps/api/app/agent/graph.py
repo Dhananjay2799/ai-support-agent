@@ -11,7 +11,8 @@ The model decides which tool to call; the graph decides what's allowed:
 - citations are checked against the passages actually retrieved.
 
 Conversation state is checkpointed in Postgres per session (thread_id = session_id),
-which is what gives chat and voice one shared memory.
+which is what gives chat and voice one shared memory: a voice call runs each spoken
+request through this same graph, on the same thread.
 """
 
 import json
@@ -46,6 +47,7 @@ from app.contracts import AgentEvent, Citation, CitationsEvent, DoneEvent, StepE
 from app.observability.usage import current_meter
 
 MAX_MODEL_CALLS = 8
+Channel = Literal["text", "voice"]
 CITATION = re.compile(r"\[([a-z0-9-]+#\d+)\]")
 
 
@@ -58,6 +60,7 @@ class AgentState(TypedDict, total=False):
     failed_verifications: int
     escalation: Escalation | None
     # Reset at the start of every turn
+    channel: Channel
     turn_id: str
     turn_started: float
     turn_model_calls: int
@@ -117,6 +120,7 @@ def build_graph(
                 signed_in=bool(state.get("persona_id")),
                 escalation=state.get("escalation"),
                 today=env.now().date(),
+                channel=state.get("channel", "text"),
             ),
             items=state.get("items", []),
             tools=schemas,
@@ -297,11 +301,13 @@ async def run_turn(
     session_id: str,
     message: str,
     persona_id: str | None,
+    channel: Channel = "text",
 ) -> AsyncIterator[AgentEvent]:
     inputs: AgentState = {
         "items": [{"role": "user", "content": message}],
         "session_id": session_id,
         "persona_id": persona_id,
+        "channel": channel,
     }
     config: RunnableConfig = {
         "configurable": {"thread_id": session_id},

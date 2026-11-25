@@ -13,3 +13,11 @@ class ChatRequest(BaseModel):
         max_length=64,
         description="Demo persona acting as the signed-in customer",
     )
+
+
+class VoiceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: UUID = Field(description="The conversation the call joins; same id as chat")
+    persona_id: str | None = Field(default=None, max_length=64)
+    sdp: str = Field(min_length=1, max_length=20_000, description="The browser's WebRTC SDP offer")

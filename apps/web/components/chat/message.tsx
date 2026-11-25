@@ -1,4 +1,4 @@
-import { RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Mic, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 
 import { Answer } from "@/components/chat/answer";
 import { EscalationCard } from "@/components/chat/escalation-card";
@@ -18,6 +18,7 @@ export function Message({ turn, onRetry }: { turn: Turn; onRetry?: () => void })
     return (
       <div className="flex justify-end">
         <p className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm whitespace-pre-wrap text-primary-foreground">
+          {turn.via === "voice" && <Mic className="mr-1.5 -mt-0.5 inline size-3.5 opacity-70" aria-label="Spoken" />}
           {turn.text}
         </p>
       </div>
@@ -30,6 +31,11 @@ export function Message({ turn, onRetry }: { turn: Turn; onRetry?: () => void })
 
   return (
     <div className="max-w-full rounded-2xl rounded-bl-sm sm:max-w-[85%] border bg-card px-4 py-3 text-sm shadow-xs">
+      {turn.via === "voice" && (
+        <p className="mb-2 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+          <Mic className="size-3" aria-hidden /> Answered by voice · the agent said this in its own words
+        </p>
+      )}
       <StepList steps={turn.steps} />
       {waiting && <p className="text-muted-foreground">Thinking…</p>}
       {turn.text && <Answer text={turn.text} citations={turn.citations} streaming={streaming} />}

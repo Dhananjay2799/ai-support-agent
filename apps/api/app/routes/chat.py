@@ -4,33 +4,18 @@ import time
 import uuid
 from collections.abc import AsyncIterable
 
-import openai
-import psycopg
 from fastapi import APIRouter
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from app.agent import runtime
+from app.agent.errors import error_event
 from app.agent.graph import run_turn
 from app.config import get_settings
-from app.contracts import AgentEvent, ChatRequest, DoneEvent, ErrorEvent
+from app.contracts import AgentEvent, ChatRequest, DoneEvent
 from app.observability.usage import UsageMeter, current_meter
 
 router = APIRouter(tags=["chat"])
 log = logging.getLogger(__name__)
-
-
-def _error_event(error: Exception) -> ErrorEvent:
-    if isinstance(error, openai.APITimeoutError | openai.APIConnectionError):
-        return ErrorEvent(
-            code="llm_timeout", message="The AI service took too long to respond.", retryable=True
-        )
-    if isinstance(error, openai.RateLimitError):
-        return ErrorEvent(code="rate_limited", message="The AI service is busy right now.", retryable=True)
-    if isinstance(error, psycopg.OperationalError):
-        return ErrorEvent(
-            code="internal", message="Our account system is unreachable right now.", retryable=True
-        )
-    return ErrorEvent(code="internal", message="Something went wrong on our side.", retryable=True)
 
 
 @router.post("/chat", response_class=EventSourceResponse)
@@ -59,7 +44,7 @@ async def chat(request: ChatRequest) -> AsyncIterable[ServerSentEvent]:
             yield sse(event)
     except Exception as error:
         log.exception("chat turn failed")
-        yield sse(_error_event(error))
+        yield sse(error_event(error))
         yield sse(
             DoneEvent(
                 turn_id=f"failed-{uuid.uuid4().hex[:8]}",

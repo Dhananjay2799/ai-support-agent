@@ -27,6 +27,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from app.agent.graph import build_graph, run_turn
 from app.agent.llm import OpenAIResponder
+from app.agent.runtime import Graph
 from app.agent.tools import ToolEnv
 from app.config import get_settings
 from app.contracts import AgentEvent, agent_event_adapter
@@ -150,9 +151,8 @@ SCENARIOS = [
 ]
 
 
-async def in_process(
-    pool: AsyncConnectionPool[Any],
-) -> Callable[[str, str, str | None], AsyncIterator[AgentEvent]]:
+def local_graph(pool: AsyncConnectionPool[Any]) -> Graph:
+    """The production graph wired to a local database (shared with scripts.voice_e2e)."""
     settings = get_settings()
     client = get_openai()
     embedder = OpenAIEmbedder(client)
@@ -164,11 +164,17 @@ async def in_process(
         policy=load_policy(),
         demo_mode=True,
     )
-    graph = build_graph(
+    return build_graph(
         OpenAIResponder(client, settings.agent_model, settings.agent_reasoning_effort),
         env,
         AsyncPostgresSaver(pool),
     )
+
+
+async def in_process(
+    pool: AsyncConnectionPool[Any],
+) -> Callable[[str, str, str | None], AsyncIterator[AgentEvent]]:
+    graph = local_graph(pool)
 
     def send(session: str, message: str, persona: str | None) -> AsyncIterator[AgentEvent]:
         return run_turn(graph, session_id=session, message=message, persona_id=persona)

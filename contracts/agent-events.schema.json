@@ -7,8 +7,14 @@
     "event": {
       "$ref": "#/definitions/AgentEvent"
     },
+    "voiceEvent": {
+      "$ref": "#/definitions/VoiceEvent"
+    },
     "chatRequest": {
       "$ref": "#/definitions/ChatRequest"
+    },
+    "voiceRequest": {
+      "$ref": "#/definitions/VoiceRequest"
     }
   },
   "definitions": {
@@ -402,6 +408,85 @@
       "title": "Usage",
       "type": "object"
     },
+    "VoiceEndedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "voice_ended",
+          "default": "voice_ended",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "hangup",
+            "time_limit",
+            "closed",
+            "error"
+          ],
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "reason",
+        "duration_ms"
+      ],
+      "title": "VoiceEndedEvent",
+      "type": "object"
+    },
+    "VoiceSessionEvent": {
+      "additionalProperties": false,
+      "description": "First event of a call: the WebRTC answer for the browser's offer.",
+      "properties": {
+        "type": {
+          "const": "voice_session",
+          "default": "voice_session",
+          "type": "string"
+        },
+        "live_session_id": {
+          "type": "string"
+        },
+        "sdp": {
+          "description": "SDP answer to apply as the peer connection's remote description",
+          "type": "string"
+        },
+        "max_seconds": {
+          "description": "The call is closed after this long",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "live_session_id",
+        "sdp",
+        "max_seconds"
+      ],
+      "title": "VoiceSessionEvent",
+      "type": "object"
+    },
+    "VoiceTurnEvent": {
+      "additionalProperties": false,
+      "description": "The customer's spoken request, sent before the agent turn that handles it.",
+      "properties": {
+        "type": {
+          "const": "voice_turn",
+          "default": "voice_turn",
+          "type": "string"
+        },
+        "utterance": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "utterance"
+      ],
+      "title": "VoiceTurnEvent",
+      "type": "object"
+    },
     "AgentEvent": {
       "discriminator": {
         "mapping": {
@@ -417,6 +502,59 @@
         "propertyName": "type"
       },
       "oneOf": [
+        {
+          "$ref": "#/definitions/TokenEvent"
+        },
+        {
+          "$ref": "#/definitions/StepEvent"
+        },
+        {
+          "$ref": "#/definitions/GuardrailEvent"
+        },
+        {
+          "$ref": "#/definitions/EscalationEvent"
+        },
+        {
+          "$ref": "#/definitions/CitationsEvent"
+        },
+        {
+          "$ref": "#/definitions/TraceEvent"
+        },
+        {
+          "$ref": "#/definitions/ErrorEvent"
+        },
+        {
+          "$ref": "#/definitions/DoneEvent"
+        }
+      ]
+    },
+    "VoiceEvent": {
+      "discriminator": {
+        "mapping": {
+          "citations": "#/definitions/CitationsEvent",
+          "done": "#/definitions/DoneEvent",
+          "error": "#/definitions/ErrorEvent",
+          "escalation": "#/definitions/EscalationEvent",
+          "guardrail": "#/definitions/GuardrailEvent",
+          "step": "#/definitions/StepEvent",
+          "token": "#/definitions/TokenEvent",
+          "trace": "#/definitions/TraceEvent",
+          "voice_ended": "#/definitions/VoiceEndedEvent",
+          "voice_session": "#/definitions/VoiceSessionEvent",
+          "voice_turn": "#/definitions/VoiceTurnEvent"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/definitions/VoiceSessionEvent"
+        },
+        {
+          "$ref": "#/definitions/VoiceTurnEvent"
+        },
+        {
+          "$ref": "#/definitions/VoiceEndedEvent"
+        },
         {
           "$ref": "#/definitions/TokenEvent"
         },
@@ -475,6 +613,40 @@
         "message"
       ],
       "title": "ChatRequest",
+      "type": "object"
+    },
+    "VoiceRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "description": "The conversation the call joins; same id as chat",
+          "format": "uuid",
+          "type": "string"
+        },
+        "persona_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sdp": {
+          "description": "The browser's WebRTC SDP offer",
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "sdp"
+      ],
+      "title": "VoiceRequest",
       "type": "object"
     }
   }

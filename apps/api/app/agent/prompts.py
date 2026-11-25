@@ -42,8 +42,21 @@ amounts, dates and limits exactly. Don't narrate tool calls; the customer sees p
 """
 
 
+VOICE_STYLE = """
+This turn was spoken on a phone call; your reply will be read aloud. Answer in one to three short
+sentences of plain speech: no lists, no markdown, no URLs. Keep amounts and ticket ids exact. Still
+add the [doc#n] markers after facts from the docs; they are shown on screen, not spoken. The
+transcript may garble emails: "priya dot shah at example dot com" is priya.shah@example.com.
+"""
+
+
 def agent_instructions(
-    *, customer: Customer | None, signed_in: bool, escalation: Escalation | None, today: date
+    *,
+    customer: Customer | None,
+    signed_in: bool,
+    escalation: Escalation | None,
+    today: date,
+    channel: str = "text",
 ) -> str:
     context = [f"Today is {today.isoformat()}."]
     if customer:
@@ -60,7 +73,8 @@ def agent_instructions(
             f"Ticket {escalation['ticket_id']} is open with a specialist "
             f"(first reply within {escalation['first_response_hours']} hours). Take no account actions."
         )
-    return AGENT_RULES + "\nContext:\n" + "\n".join(f"- {line}" for line in context)
+    style = VOICE_STYLE if channel == "voice" else ""
+    return AGENT_RULES + style + "\nContext:\n" + "\n".join(f"- {line}" for line in context)
 
 
 def escalation_message(reason: str, escalation: Escalation) -> str:

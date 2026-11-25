@@ -1,13 +1,16 @@
 "use client";
 
-import { ArrowUp, Square, UserRound } from "lucide-react";
+import { ArrowUp, Phone, Square, UserRound } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { Message } from "@/components/chat/message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CallPanel } from "@/components/voice/call-panel";
+import { useVoiceCall } from "@/components/voice/use-voice-call";
 import { type AssistantTurn, type Turn, applyEvent, newAssistantTurn } from "@/lib/chat-state";
 import { ChatStreamError, streamChat } from "@/lib/chat-client";
+import type { AgentEvent } from "@/lib/generated/agent-events";
 import { type Persona, apiPersonaId } from "@/lib/personas";
 
 /** One conversation. Remount it (new `key`) to start over with a fresh session. */
@@ -29,6 +32,37 @@ export function ChatPanel({ persona }: { persona: Persona }) {
   const updateAssistant = useCallback((id: string, update: (turn: AssistantTurn) => AssistantTurn) => {
     setTurns((all) => all.map((t) => (t.role === "assistant" && t.id === id ? update(t) : t)));
   }, []);
+  const sessionId = useCallback(() => (sessionRef.current ??= crypto.randomUUID()), []);
+
+  // A voice call joins this same conversation: each spoken request and the agent's
+  // turn for it are added to the list like typed ones.
+  const voiceTurnRef = useRef<string | null>(null);
+  const onVoiceTurn = useCallback((utterance: string) => {
+    const assistantId = crypto.randomUUID();
+    voiceTurnRef.current = assistantId;
+    setTurns((all) => [
+      ...all,
+      { role: "user", id: crypto.randomUUID(), text: utterance, via: "voice" },
+      newAssistantTurn(assistantId, "voice"),
+    ]);
+  }, []);
+  const onVoiceAgentEvent = useCallback(
+    (event: AgentEvent) => {
+      const id = voiceTurnRef.current;
+      if (!id) return false;
+      updateAssistant(id, (turn) => applyEvent(turn, event));
+      if (event.type === "done") voiceTurnRef.current = null;
+      return true;
+    },
+    [updateAssistant],
+  );
+  const call = useVoiceCall({
+    sessionId,
+    personaId: apiPersonaId(persona),
+    onVoiceTurn,
+    onAgentEvent: onVoiceAgentEvent,
+  });
+  const onCall = call.state?.status === "connecting" || call.state?.status === "live";
 
   const send = useCallback(
     async (text: string) => {
@@ -48,7 +82,7 @@ export function ChatPanel({ persona }: { persona: Persona }) {
       abortRef.current = controller;
       try {
         await streamChat(
-          { session_id: (sessionRef.current ??= crypto.randomUUID()), message, persona_id: apiPersonaId(persona) },
+          { session_id: sessionId(), message, persona_id: apiPersonaId(persona) },
           {
             signal: controller.signal,
             onEvent: (event) => updateAssistant(assistantId, (turn) => applyEvent(turn, event)),
@@ -71,7 +105,7 @@ export function ChatPanel({ persona }: { persona: Persona }) {
         abortRef.current = null;
       }
     },
-    [busy, persona, updateAssistant],
+    [busy, persona, sessionId, updateAssistant],
   );
 
   const retryLast = useCallback(() => {
@@ -126,22 +160,37 @@ export function ChatPanel({ persona }: { persona: Persona }) {
         </div>
       </div>
 
+      <CallPanel call={call} onRetry={() => void call.start()} />
+
       <form onSubmit={onSubmit} className="border-t bg-background">
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
           <Input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Message Acme Cloud support…"
+            placeholder={onCall ? "On a call. Hang up to type." : "Message Acme Cloud support…"}
             aria-label="Message"
             maxLength={4000}
-            disabled={busy}
+            disabled={busy || onCall}
           />
+          {!busy && (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              aria-label="Start a voice call"
+              title="Talk to the agent"
+              disabled={onCall}
+              onClick={() => void call.start()}
+            >
+              <Phone />
+            </Button>
+          )}
           {busy ? (
             <Button type="button" size="icon" variant="outline" aria-label="Stop" onClick={() => abortRef.current?.abort()}>
               <Square />
             </Button>
           ) : (
-            <Button type="submit" size="icon" aria-label="Send" disabled={!draft.trim()}>
+            <Button type="submit" size="icon" aria-label="Send" disabled={!draft.trim() || onCall}>
               <ArrowUp />
             </Button>
           )}

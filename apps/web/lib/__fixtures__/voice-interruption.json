@@ -1,0 +1,338 @@
+[
+{
+"type": "session.input_transcript.delta",
+"delta": " Hi",
+"start_ms": 15400,
+"end_ms": 15600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Hi",
+"start_ms": 15800,
+"end_ms": 16000
+},
+{
+"type": "session.input_transcript.delta",
+"delta": ", I think",
+"start_ms": 17000,
+"end_ms": 17200
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " I was",
+"start_ms": 17200,
+"end_ms": 17400
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " charged",
+"start_ms": 17400,
+"end_ms": 17600
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " twice",
+"start_ms": 17800,
+"end_ms": 18000
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " this",
+"start_ms": 18000,
+"end_ms": 18200
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " month",
+"start_ms": 18200,
+"end_ms": 18400
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " for",
+"start_ms": 18400,
+"end_ms": 18600
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " my",
+"start_ms": 18600,
+"end_ms": 18800
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " subscription",
+"start_ms": 19600,
+"end_ms": 19800
+},
+{
+"type": "session.input_transcript.delta",
+"delta": ". Can you",
+"start_ms": 20200,
+"end_ms": 20400
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " fix",
+"start_ms": 20600,
+"end_ms": 20800
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " that",
+"start_ms": 20800,
+"end_ms": 21000
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " please",
+"start_ms": 21200,
+"end_ms": 21400
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Sure,",
+"start_ms": 21600,
+"end_ms": 21800
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " uh",
+"start_ms": 22200,
+"end_ms": 22400
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " let",
+"start_ms": 22400,
+"end_ms": 22600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " me",
+"start_ms": 22600,
+"end_ms": 22800
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " pull",
+"start_ms": 22800,
+"end_ms": 23000
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " up",
+"start_ms": 23000,
+"end_ms": 23200
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " your",
+"start_ms": 23200,
+"end_ms": 23400
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " account.",
+"start_ms": 23400,
+"end_ms": 23600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Thanks",
+"start_ms": 27000,
+"end_ms": 27200
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " for",
+"start_ms": 27400,
+"end_ms": 27600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " waiting,",
+"start_ms": 27600,
+"end_ms": 27800
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Priya",
+"start_ms": 27800,
+"end_ms": 28000
+},
+{
+"type": "session.output_transcript.delta",
+"delta": ".",
+"start_ms": 28200,
+"end_ms": 28400
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " I",
+"start_ms": 28600,
+"end_ms": 28800
+},
+{
+"type": "session.output_transcript.delta",
+"delta": "\u2019ve",
+"start_ms": 28800,
+"end_ms": 29000
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " refunded",
+"start_ms": 29000,
+"end_ms": 29200
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " Sorry to",
+"start_ms": 30200,
+"end_ms": 30400
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Oh.",
+"start_ms": 30400,
+"end_ms": 30600
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " cut",
+"start_ms": 30600,
+"end_ms": 30800
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " in",
+"start_ms": 30800,
+"end_ms": 31000
+},
+{
+"type": "session.input_transcript.delta",
+"delta": ", what",
+"start_ms": 31600,
+"end_ms": 31800
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " does",
+"start_ms": 31800,
+"end_ms": 32000
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " my",
+"start_ms": 32000,
+"end_ms": 32200
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " plan",
+"start_ms": 32400,
+"end_ms": 32600
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " include",
+"start_ms": 33000,
+"end_ms": 33200
+},
+{
+"type": "session.input_transcript.delta",
+"delta": " storage",
+"start_ms": 33800,
+"end_ms": 34000
+},
+{
+"type": "session.input_transcript.delta",
+"delta": "-wise",
+"start_ms": 34000,
+"end_ms": 34200
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Right,",
+"start_ms": 34400,
+"end_ms": 34600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " let",
+"start_ms": 34800,
+"end_ms": 35000
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " me check",
+"start_ms": 35000,
+"end_ms": 35200
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " your storage",
+"start_ms": 35400,
+"end_ms": 35600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " details.",
+"start_ms": 35800,
+"end_ms": 36000
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Your",
+"start_ms": 38000,
+"end_ms": 38200
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " Pro",
+"start_ms": 38200,
+"end_ms": 38400
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " plan",
+"start_ms": 38400,
+"end_ms": 38600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " includes",
+"start_ms": 38800,
+"end_ms": 39000
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " ",
+"start_ms": 39200,
+"end_ms": 39400
+},
+{
+"type": "session.output_transcript.delta",
+"delta": "1",
+"start_ms": 39400,
+"end_ms": 39600
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " terabyte",
+"start_ms": 39600,
+"end_ms": 39800
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " of",
+"start_ms": 40000,
+"end_ms": 40200
+},
+{
+"type": "session.output_transcript.delta",
+"delta": " storage.",
+"start_ms": 40200,
+"end_ms": 40400
+}
+]

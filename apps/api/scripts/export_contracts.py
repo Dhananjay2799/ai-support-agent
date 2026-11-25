@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.contracts import ChatRequest, agent_event_adapter
+from app.contracts import ChatRequest, VoiceRequest, agent_event_adapter, voice_event_adapter
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OUT = REPO_ROOT / "contracts" / "agent-events.schema.json"
@@ -33,12 +33,25 @@ def build_schema() -> dict[str, Any]:
     events = _strip_field_titles(
         agent_event_adapter.json_schema(mode="serialization", ref_template="#/definitions/{model}")
     )
+    voice = _strip_field_titles(
+        voice_event_adapter.json_schema(mode="serialization", ref_template="#/definitions/{model}")
+    )
     request = _strip_field_titles(
         ChatRequest.model_json_schema(mode="validation", ref_template="#/definitions/{model}")
     )
-    definitions: dict[str, Any] = {**events.pop("$defs", {}), **request.pop("$defs", {})}
+    voice_request = _strip_field_titles(
+        VoiceRequest.model_json_schema(mode="validation", ref_template="#/definitions/{model}")
+    )
+    definitions: dict[str, Any] = {
+        **events.pop("$defs", {}),
+        **voice.pop("$defs", {}),
+        **request.pop("$defs", {}),
+        **voice_request.pop("$defs", {}),
+    }
     definitions["AgentEvent"] = events
+    definitions["VoiceEvent"] = voice
     definitions["ChatRequest"] = request
+    definitions["VoiceRequest"] = voice_request
     return {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": "Contracts",
@@ -46,7 +59,9 @@ def build_schema() -> dict[str, Any]:
         "type": "object",
         "properties": {
             "event": {"$ref": "#/definitions/AgentEvent"},
+            "voiceEvent": {"$ref": "#/definitions/VoiceEvent"},
             "chatRequest": {"$ref": "#/definitions/ChatRequest"},
+            "voiceRequest": {"$ref": "#/definitions/VoiceRequest"},
         },
         "definitions": definitions,
     }

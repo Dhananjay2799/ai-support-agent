@@ -21,11 +21,13 @@ export interface UserTurn {
   role: "user";
   id: string;
   text: string;
+  via?: "voice";
 }
 
 export interface AssistantTurn {
   role: "assistant";
   id: string;
+  via?: "voice";
   text: string;
   steps: Step[];
   status: "streaming" | "done" | "error";
@@ -38,8 +40,8 @@ export interface AssistantTurn {
 
 export type Turn = UserTurn | AssistantTurn;
 
-export function newAssistantTurn(id: string): AssistantTurn {
-  return { role: "assistant", id, text: "", steps: [], status: "streaming" };
+export function newAssistantTurn(id: string, via?: "voice"): AssistantTurn {
+  return { role: "assistant", id, text: "", steps: [], status: "streaming", ...(via && { via }) };
 }
 
 function upsertStep(steps: Step[], event: StepEvent): Step[] {

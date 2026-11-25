@@ -1,4 +1,4 @@
-from app.contracts.chat import ChatRequest
+from app.contracts.chat import ChatRequest, VoiceRequest
 from app.contracts.events import (
     AgentEvent,
     Citation,
@@ -12,7 +12,13 @@ from app.contracts.events import (
     TokenEvent,
     TraceEvent,
     Usage,
+    VoiceEndedEvent,
+    VoiceEndReason,
+    VoiceEvent,
+    VoiceSessionEvent,
+    VoiceTurnEvent,
     agent_event_adapter,
+    voice_event_adapter,
 )
 
 __all__ = [
@@ -29,5 +35,12 @@ __all__ = [
     "TokenEvent",
     "TraceEvent",
     "Usage",
+    "VoiceEndReason",
+    "VoiceEndedEvent",
+    "VoiceEvent",
+    "VoiceRequest",
+    "VoiceSessionEvent",
+    "VoiceTurnEvent",
     "agent_event_adapter",
+    "voice_event_adapter",
 ]

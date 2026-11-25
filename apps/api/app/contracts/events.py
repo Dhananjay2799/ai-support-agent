@@ -1,7 +1,8 @@
 """Wire contract for everything the API streams to the UI.
 
-One discriminated union (`AgentEvent`) is shared by chat and voice. The JSON Schema
-exported from it (`scripts/export_contracts.py`) generates the TypeScript types in
+`AgentEvent` is what one agent turn streams, in chat and in voice alike. `VoiceEvent`
+adds the call's own events around those turns. The JSON Schema exported from both
+(`scripts/export_contracts.py`) generates the TypeScript types in
 `apps/web/lib/generated/agent-events.ts`, so both sides always agree on the shape.
 """
 
@@ -112,7 +113,7 @@ class DoneEvent(_Event):
     latency_ms: float = Field(ge=0)
 
 
-AgentEvent = Annotated[
+_AgentEvents = (
     TokenEvent
     | StepEvent
     | GuardrailEvent
@@ -120,8 +121,42 @@ AgentEvent = Annotated[
     | CitationsEvent
     | TraceEvent
     | ErrorEvent
-    | DoneEvent,
-    Field(discriminator="type"),
-]
+    | DoneEvent
+)
+AgentEvent = Annotated[_AgentEvents, Field(discriminator="type")]
 
 agent_event_adapter: TypeAdapter[AgentEvent] = TypeAdapter(AgentEvent)
+
+
+# --- Voice calls ---------------------------------------------------------------------
+
+VoiceEndReason = Literal["hangup", "time_limit", "closed", "error"]
+
+
+class VoiceSessionEvent(_Event):
+    """First event of a call: the WebRTC answer for the browser's offer."""
+
+    type: Literal["voice_session"] = "voice_session"
+    live_session_id: str
+    sdp: str = Field(description="SDP answer to apply as the peer connection's remote description")
+    max_seconds: int = Field(description="The call is closed after this long")
+
+
+class VoiceTurnEvent(_Event):
+    """The customer's spoken request, sent before the agent turn that handles it."""
+
+    type: Literal["voice_turn"] = "voice_turn"
+    utterance: str
+
+
+class VoiceEndedEvent(_Event):
+    type: Literal["voice_ended"] = "voice_ended"
+    reason: VoiceEndReason
+    duration_ms: float
+
+
+VoiceEvent = Annotated[
+    VoiceSessionEvent | VoiceTurnEvent | VoiceEndedEvent | _AgentEvents, Field(discriminator="type")
+]
+
+voice_event_adapter: TypeAdapter[VoiceEvent] = TypeAdapter(VoiceEvent)

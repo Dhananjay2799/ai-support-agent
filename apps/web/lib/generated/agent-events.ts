@@ -11,13 +11,31 @@ export type AgentEvent =
  * via the `definition` "JsonValue".
  */
 export type JsonValue = unknown;
+/**
+ * This interface was referenced by `Contracts`'s JSON-Schema
+ * via the `definition` "VoiceEvent".
+ */
+export type VoiceEvent =
+  | VoiceSessionEvent
+  | VoiceTurnEvent
+  | VoiceEndedEvent
+  | TokenEvent
+  | StepEvent
+  | GuardrailEvent
+  | EscalationEvent
+  | CitationsEvent
+  | TraceEvent
+  | ErrorEvent
+  | DoneEvent;
 
 /**
  * Generated from apps/api/app/contracts. Do not edit by hand.
  */
 export interface Contracts {
   event?: AgentEvent;
+  voiceEvent?: VoiceEvent;
   chatRequest?: ChatRequest;
+  voiceRequest?: VoiceRequest;
 }
 /**
  * A chunk of the assistant's reply text.
@@ -156,6 +174,43 @@ export interface Usage {
   cached_tokens: number;
 }
 /**
+ * First event of a call: the WebRTC answer for the browser's offer.
+ *
+ * This interface was referenced by `Contracts`'s JSON-Schema
+ * via the `definition` "VoiceSessionEvent".
+ */
+export interface VoiceSessionEvent {
+  type: "voice_session";
+  live_session_id: string;
+  /**
+   * SDP answer to apply as the peer connection's remote description
+   */
+  sdp: string;
+  /**
+   * The call is closed after this long
+   */
+  max_seconds: number;
+}
+/**
+ * The customer's spoken request, sent before the agent turn that handles it.
+ *
+ * This interface was referenced by `Contracts`'s JSON-Schema
+ * via the `definition` "VoiceTurnEvent".
+ */
+export interface VoiceTurnEvent {
+  type: "voice_turn";
+  utterance: string;
+}
+/**
+ * This interface was referenced by `Contracts`'s JSON-Schema
+ * via the `definition` "VoiceEndedEvent".
+ */
+export interface VoiceEndedEvent {
+  type: "voice_ended";
+  reason: "hangup" | "time_limit" | "closed" | "error";
+  duration_ms: number;
+}
+/**
  * This interface was referenced by `Contracts`'s JSON-Schema
  * via the `definition` "ChatRequest".
  */
@@ -169,4 +224,19 @@ export interface ChatRequest {
    * Demo persona acting as the signed-in customer
    */
   persona_id?: string | null;
+}
+/**
+ * This interface was referenced by `Contracts`'s JSON-Schema
+ * via the `definition` "VoiceRequest".
+ */
+export interface VoiceRequest {
+  /**
+   * The conversation the call joins; same id as chat
+   */
+  session_id: string;
+  persona_id?: string | null;
+  /**
+   * The browser's WebRTC SDP offer
+   */
+  sdp: string;
 }
