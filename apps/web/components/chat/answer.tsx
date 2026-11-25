@@ -41,7 +41,7 @@ export function Answer({ text, citations, streaming }: { text: string; citations
                 <BookOpen className="size-3" aria-hidden />
                 <span>
                   {citation.doc_title}
-                  <span className="text-muted-foreground/70"> › {citation.section.split(" > ").at(-1)}</span>
+                  <span className="text-muted-foreground"> › {citation.section.split(" > ").at(-1)}</span>
                 </span>
               </li>
             ))}
