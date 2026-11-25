@@ -330,6 +330,9 @@ async def issue_refund(env: ToolEnv, s: ToolSession, args: IssueRefundArgs) -> T
                 already_refunded=charge.refunded,
                 amount=amount,
                 now=env.now(),
+                duplicate_already_refunded=await repo.duplicate_refunded(
+                    conn, s.customer["id"], charge, env.policy.refunds.duplicate_window_days
+                ),
             ),
             env.policy,
         )

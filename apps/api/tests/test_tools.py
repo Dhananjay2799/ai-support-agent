@@ -97,6 +97,18 @@ async def test_duplicate_charge_refund_is_idempotent(env: ToolEnv) -> None:
     assert row is not None and row["n"] == 1
 
 
+async def test_only_one_charge_of_a_duplicate_pair_is_refunded(env: ToolEnv) -> None:
+    """Asked again in a new conversation, the agent must not refund the original charge too."""
+    priya = await signed_in(env, "priya")
+    first = await call(env, priya, "issue_refund", charge_id="ch_7HX2P2", amount=29.0, reason="duplicate")
+    assert first.output["status"] == "refunded"
+
+    later = await signed_in(env, "priya")  # a fresh session
+    second = await call(env, later, "issue_refund", charge_id="ch_7HX2P1", amount=29.0, reason="duplicate")
+    assert second.output["status"] == "not_allowed"
+    assert second.output["code"] == "duplicate_already_refunded" and second.output["human_can_approve"]
+
+
 @pytest.mark.parametrize(
     ("persona", "charge_id", "amount", "code"),
     [

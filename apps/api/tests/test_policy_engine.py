@@ -38,6 +38,7 @@ def test_pro_duplicate_charge_is_approved() -> None:
         ({"already_refunded": Decimal("29.00")}, "already_refunded", False),
         ({"amount": Decimal("29.01")}, "exceeds_charge", False),
         ({"charge_created_at": NOW - timedelta(days=31)}, "outside_window", True),
+        ({"duplicate_already_refunded": True}, "duplicate_already_refunded", True),
     ],
 )
 def test_each_rule_blocks_with_its_own_code(

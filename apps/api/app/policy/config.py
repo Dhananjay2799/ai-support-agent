@@ -23,6 +23,7 @@ class TierRefundRule(_Frozen):
 
 class RefundPolicy(_Frozen):
     eligible_contract_statuses: tuple[ContractStatus, ...]
+    duplicate_window_days: int
     tiers: dict[Tier, TierRefundRule]
 
 

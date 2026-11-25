@@ -8,6 +8,10 @@ currency: usd
 refunds:
   # A refund needs an active contract. past_due and canceled accounts are blocked.
   eligible_contract_statuses: [active]
+  # Charges with the same amount and description this close together are one billing
+  # period's duplicates. Only one of a pair may be refunded automatically: the original
+  # is kept, so a second refund on the pair goes to the billing team.
+  duplicate_window_days: 3
   tiers:
     free:
       refunds_allowed: false

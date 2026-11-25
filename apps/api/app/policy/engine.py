@@ -21,6 +21,7 @@ RefundCode = Literal[
     "charge_not_refundable",
     "already_refunded",
     "exceeds_charge",
+    "duplicate_already_refunded",
     "outside_window",
     "over_auto_limit",
 ]
@@ -38,6 +39,9 @@ class RefundRequest:
     already_refunded: Decimal
     amount: Decimal
     now: datetime
+    # Another charge of the same amount and description in the same billing period was
+    # already refunded: this one is the charge the duplicate rule says to keep.
+    duplicate_already_refunded: bool = False
 
 
 @dataclass(frozen=True)
@@ -86,6 +90,14 @@ def evaluate_refund(request: RefundRequest, policy: Policy) -> RefundDecision:
             False,
             "exceeds_charge",
             f"The most that can be refunded on this charge is {_money(remaining)}.",
+        )
+    if request.duplicate_already_refunded:
+        return RefundDecision(
+            False,
+            "duplicate_already_refunded",
+            "This charge's duplicate in the same billing period was already refunded, so this is "
+            "the original charge, which is kept. Refunding it as well needs the billing team.",
+            human_can_approve=True,
         )
     if request.now - request.charge_created_at > timedelta(days=tier_rule.window_days):
         return RefundDecision(

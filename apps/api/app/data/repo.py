@@ -97,6 +97,33 @@ async def get_charge(conn: Conn, customer_id: int, public_id: str) -> ChargeRow 
     return ChargeRow(**row) if row else None
 
 
+async def duplicate_refunded(conn: Conn, customer_id: int, charge: ChargeRow, window_days: int) -> bool:
+    """Was another charge of the same amount and description, within `window_days` of this
+    one, already refunded? Then the two are a duplicate pair and this is the one to keep."""
+    cur = await conn.execute(
+        """
+        select exists (
+          select 1 from public.charges ch
+          join public.refunds r on r.charge_id = ch.id and r.status = 'succeeded'
+          where ch.customer_id = %(customer)s and ch.id <> %(charge)s
+            and ch.amount = %(amount)s and ch.description = %(description)s
+            and ch.created_at between %(created)s - make_interval(days => %(days)s)
+                                  and %(created)s + make_interval(days => %(days)s)
+        ) as refunded
+        """,
+        {
+            "customer": customer_id,
+            "charge": charge.id,
+            "amount": charge.amount,
+            "description": charge.description,
+            "created": charge.created_at,
+            "days": window_days,
+        },
+    )
+    row = await cur.fetchone()
+    return bool(row and row["refunded"])
+
+
 async def refund_by_key(conn: Conn, idempotency_key: str) -> RefundRow | None:
     cur = await conn.execute(
         "select public_id, amount, created_at from public.refunds where idempotency_key = %s",

@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -61,6 +62,9 @@ class Transcript:
     def escalated(self) -> bool:
         return any(e.type == "escalation" for e in self.events)
 
+    def refund_ids(self) -> set[str]:
+        return {m for d in self.details("issue_refund") for m in re.findall(r"re_[A-Z0-9]+", d)}
+
     def cited(self) -> int:
         return sum(len(e.citations) for e in self.events if e.type == "citations")
 
@@ -72,6 +76,7 @@ class Scenario:
     messages: tuple[str, ...]
     expect: str
     check: Callable[[Transcript], bool]
+    fresh_sessions: bool = False  # each message starts a new conversation
 
 
 SCENARIOS = [
@@ -84,6 +89,17 @@ SCENARIOS = [
             {"verify_customer", "get_account", "issue_refund"} <= set(t.tools())
             and any("refunded" in d for d in t.details("issue_refund"))
         ),
+    ),
+    Scenario(
+        "Priya again, in a new conversation: the original charge is kept",
+        "priya",
+        (
+            "I was charged twice this month. Can you fix it?",
+            "I was charged twice this month. Can you fix it?",
+        ),
+        "exactly one refund across both conversations; the second sees it's already fixed",
+        lambda t: len(t.refund_ids()) == 1,  # a replayed refund returns the same id: no new money
+        fresh_sessions=True,
     ),
     Scenario(
         "Marcus: Free-plan add-on refund declined with a citation",
@@ -225,6 +241,8 @@ async def main(api: str | None, only: str | None) -> None:
         token = current_meter.set(meter)
         started = time.perf_counter()
         for message in scenario.messages:
+            if scenario.fresh_sessions:
+                session = str(uuid.uuid4())
             async for event in send(session, message, scenario.persona):
                 transcript.events.append(event)
         current_meter.reset(token)
