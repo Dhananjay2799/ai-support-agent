@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="1200" height="660" role="img" aria-labelledby="title desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="title">AI Support Agent architecture</title>
+  <desc id="desc">The browser streams chat and voice requests to a FastAPI service, which runs one LangGraph agent with tools, a policy engine and hybrid RAG. Voice audio goes directly from the browser to GPT-Live over WebRTC; the API joins the same call over a sideband WebSocket. OpenAI hosts the models; Supabase Postgres holds the CRM, vectors, agent memory, traces and rate limits.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3f3f46"/>
+    </marker>
+    <marker id="arrow-trace" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+    <style>
+      .frame { fill: #ffffff; }
+      .box-title { font-size: 13px; font-weight: 600; fill: #3f3f46; letter-spacing: .02em; }
+      .card { fill: #ffffff; stroke: #d4d4d8; stroke-width: 1.2; }
+      .card-key { fill: #ffffff; stroke: #18181b; stroke-width: 1.6; }
+      .name { font-size: 14px; font-weight: 600; fill: #18181b; }
+      .sub { font-size: 12px; fill: #52525b; }
+      .edge { stroke: #3f3f46; stroke-width: 1.5; fill: none; }
+      .edge-trace { stroke: #7c3aed; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+      .label { font-size: 11.5px; fill: #27272a; }
+      .label-bg { fill: #ffffff; }
+      .label-trace { font-size: 11.5px; fill: #6d28d9; }
+      .note { font-size: 11.5px; fill: #71717a; }
+    </style>
+  </defs>
+
+  <rect class="frame" x="0" y="0" width="1200" height="660" rx="16"/>
+
+  <!-- Column containers -->
+  <rect x="24" y="96" width="276" height="470" rx="14" fill="#f5f7ff" stroke="#c7d2fe"/>
+  <text class="box-title" x="40" y="120">BROWSER · Next.js on Vercel</text>
+
+  <rect x="372" y="96" width="452" height="470" rx="14" fill="#f3faf5" stroke="#bbe5c8"/>
+  <text class="box-title" x="388" y="120">API · FastAPI on Vercel Functions</text>
+
+  <rect x="896" y="96" width="280" height="356" rx="14" fill="#fff7ed" stroke="#fbd5b5"/>
+  <text class="box-title" x="912" y="120">OPENAI</text>
+
+  <!-- Browser cards -->
+  <rect class="card" x="44" y="140" width="236" height="80" rx="10"/>
+  <text class="name" x="60" y="168">Voice call</text>
+  <text class="sub" x="60" y="188">waveform · live captions</text>
+  <text class="sub" x="60" y="206">interruptions · mute · hang up</text>
+
+  <rect class="card" x="44" y="262" width="236" height="80" rx="10"/>
+  <text class="name" x="60" y="290">Chat</text>
+  <text class="sub" x="60" y="310">streamed reply · live tool steps</text>
+  <text class="sub" x="60" y="328">citations · ticket card</text>
+
+  <rect class="card" x="44" y="452" width="236" height="80" rx="10"/>
+  <text class="name" x="60" y="480">Traces drawer</text>
+  <text class="sub" x="60" y="500">prompts · latency · tokens · cost</text>
+  <text class="sub" x="60" y="518">failure simulator</text>
+
+  <!-- API cards -->
+  <rect class="card" x="392" y="150" width="200" height="60" rx="10"/>
+  <text class="name" x="408" y="176">Voice bridge</text>
+  <text class="sub" x="408" y="195">turns requests into agent turns</text>
+
+  <rect class="card-key" x="392" y="262" width="412" height="80" rx="10"/>
+  <text class="name" x="408" y="290">LangGraph agent · one memory for text and voice</text>
+  <text class="sub" x="408" y="310">verify identity → read account → check policy → refund or ticket</text>
+  <text class="sub" x="408" y="328">step cap · cited answers · retries and fallback model</text>
+
+  <rect class="card" x="392" y="382" width="198" height="64" rx="10"/>
+  <text class="name" x="408" y="408">Tools + policy engine</text>
+  <text class="sub" x="408" y="427">limits enforced in code</text>
+
+  <rect class="card" x="606" y="382" width="198" height="64" rx="10"/>
+  <text class="name" x="622" y="408">Hybrid RAG</text>
+  <text class="sub" x="622" y="427">vector + full-text · guardrails</text>
+
+  <rect class="card" x="392" y="478" width="198" height="64" rx="10"/>
+  <text class="name" x="408" y="504">Tracer</text>
+  <text class="sub" x="408" y="523">a span per call, tool, check</text>
+
+  <rect class="card" x="606" y="478" width="198" height="64" rx="10"/>
+  <text class="name" x="622" y="504">Rate limits</text>
+  <text class="sub" x="622" y="523">per chat · per IP · daily budget</text>
+
+  <!-- OpenAI cards -->
+  <rect class="card" x="916" y="140" width="240" height="80" rx="10"/>
+  <text class="name" x="932" y="168">GPT-Live</text>
+  <text class="sub" x="932" y="188">listens and speaks</text>
+  <text class="sub" x="932" y="206">handles interruptions</text>
+
+  <rect class="card" x="916" y="262" width="240" height="80" rx="10"/>
+  <text class="name" x="932" y="290">Responses API</text>
+  <text class="sub" x="932" y="310">agent and judge: gpt-6-luna</text>
+  <text class="sub" x="932" y="328">fallback: gpt-5.4-mini</text>
+
+  <rect class="card" x="916" y="382" width="240" height="56" rx="10"/>
+  <text class="name" x="932" y="406">Embeddings</text>
+  <text class="sub" x="932" y="425">text-embedding-3-small</text>
+
+  <!-- Postgres -->
+  <path d="M916,494 a120,14 0 0 0 240,0 v84 a120,14 0 0 1 -240,0 z" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2"/>
+  <ellipse cx="1036" cy="494" rx="120" ry="14" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.2"/>
+  <text class="name" x="932" y="532">Supabase Postgres</text>
+  <text class="sub" x="932" y="552">CRM · pgvector · agent memory</text>
+  <text class="sub" x="932" y="570">traces · rate limits</text>
+
+  <!-- Edges -->
+  <!-- Voice: WebRTC audio straight to GPT-Live, over the top -->
+  <path class="edge" d="M264,140 V58 H1036 V140" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <rect class="label-bg" x="470" y="45" width="256" height="20" rx="4"/>
+  <text class="label" x="478" y="60">WebRTC: audio both ways + live captions</text>
+
+  <!-- Voice: offer and turn events through the API -->
+  <path class="edge" d="M280,180 H392" marker-end="url(#arrow)"/>
+  <text class="label" x="290" y="172">POST /voice</text>
+
+  <!-- Sideband between the API and GPT-Live -->
+  <path class="edge" d="M592,180 H916" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <rect class="label-bg" x="636" y="166" width="236" height="20" rx="4"/>
+  <text class="label" x="644" y="181">sideband: requests ⇄ spoken answers</text>
+
+  <!-- Bridge to agent -->
+  <path class="edge" d="M492,210 V262" marker-end="url(#arrow)"/>
+
+  <!-- Chat -->
+  <path class="edge" d="M280,302 H392" marker-end="url(#arrow)"/>
+  <text class="label" x="292" y="294">POST /chat</text>
+  <text class="note" x="292" y="320">SSE back</text>
+
+  <!-- Agent to model -->
+  <path class="edge" d="M804,302 H916" marker-end="url(#arrow)"/>
+
+  <!-- Agent to tools, tools to RAG -->
+  <path class="edge" d="M492,342 V382" marker-end="url(#arrow)"/>
+  <path class="edge" d="M590,414 H606" marker-end="url(#arrow)"/>
+
+  <!-- RAG to embeddings and to the judge -->
+  <path class="edge" d="M804,410 H916" marker-end="url(#arrow)"/>
+  <path class="edge" d="M780,382 C800,356 860,342 916,330" marker-end="url(#arrow)"/>
+  <text class="label" x="852" y="374">judge</text>
+
+  <!-- Everything stateful lives in Postgres -->
+  <path class="edge" d="M824,536 H916" marker-end="url(#arrow)"/>
+  <text class="note" x="836" y="528">state</text>
+
+  <!-- Traces back to the drawer -->
+  <path class="edge-trace" d="M392,510 H280" marker-end="url(#arrow-trace)"/>
+  <text class="label-trace" x="292" y="501">trace per turn</text>
+
+  <!-- Footer -->
+  <text class="note" x="24" y="616">Audio never passes through the API. Chat and voice requests run through the same agent, tools, policy engine, memory and tracing.</text>
+  <text class="note" x="24" y="636">Server-only database access: the browser never talks to Postgres, and the OpenAI key never reaches it.</text>
+</svg>

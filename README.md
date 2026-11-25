@@ -29,13 +29,13 @@ failure** to watch a timeout, rate limit or outage get recovered. **Reset demo**
 
 | Requirement | How | Proof |
 | --- | --- | --- |
-| Streaming chat with step indicators | SSE over POST; each tool streams a step with its result | [Contract](apps/api/app/contracts/events.py) generates the UI's types |
+| Streaming chat with step indicators | SSE over POST; each tool streams a step with its result | Every event typed end to end ([contract](apps/api/app/contracts/events.py)) |
 | Live voice: waveform, transcripts, interruption | GPT-Live over WebRTC; the server joins over a sideband and runs the same agent | Real call with synthesized speech, [docs/voice.md](docs/voice.md) |
 | Observability drawer | Per-turn span tree: prompts, outputs, latency, TTFT, tokens, cost | [docs/observability.md](docs/observability.md) |
 | RAG, custom chunking, confidence guardrails | Heading-aware chunks, hybrid pgvector + full-text search, a similarity gate and support judge | 0 unsafe answers in a 40-question eval, [docs/rag.md](docs/rag.md) |
 | Autonomous loop with 3+ tools | LangGraph: verify → account → policy → refund or ticket, in one turn | 10/10 end-to-end scenarios on the live API, [docs/agent.md](docs/agent.md) |
-| Error recovery | Visible retries, a fallback model, tool retries, graceful outages | Each path tested and simulated live |
-| Shared memory across text and voice | One Postgres-checkpointed thread per conversation | Chat → call → chat recalls the refund |
+| Error recovery | Visible retries, a fallback model, tool retries, graceful outages | Each path tested and simulated live, [docs/observability.md](docs/observability.md#error-recovery) |
+| Shared memory across text and voice | One Postgres-checkpointed thread per conversation | Real call test: chat, then voice, then chat recalls the refund |
 
 ## Results
 
@@ -45,43 +45,21 @@ failure** to watch a timeout, rate limit or outage get recovered. **Reset demo**
 - **Agent** ([evals/agent_scenarios.md](evals/agent_scenarios.md)): 10/10 scenarios against the
   deployed API with the real model, including prompt injection and asking twice for a refund.
 - **Voice**: a real GPT-Live call (synthesized speech) refunds by voice, survives an
-  interruption, and the chat afterwards remembers it. Acknowledgement within half a second of the
-  caller finishing; a full refund answer in about 5 s.
+  interruption, and the chat afterwards remembers it. The voice acknowledges within a second of
+  the caller finishing; a full refund answer is ready in about 5 s.
 - **Tests**: 121 API (pytest, real Postgres), 19 web (vitest); CI runs lint, types, formatting,
   tests, a contract-drift check and a secret scan.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  subgraph Browser["Next.js UI (Vercel)"]
-    chat[Chat + steps]
-    voice[Voice: waveform, captions]
-    drawer[Traces drawer]
-  end
-  subgraph API["FastAPI (Vercel Functions)"]
-    graph[LangGraph agent]
-    sideband[Voice sideband]
-    tools[Tools + policy engine]
-    rag[RAG + guardrails]
-    obs[Tracing, limits]
-  end
-  db[(Supabase Postgres<br/>pgvector · CRM · checkpoints · traces)]
-  live[GPT-Live]
-  llm[OpenAI Responses<br/>gpt-6-luna, fallback gpt-5.4-mini]
-
-  chat -- "POST /chat (SSE)" --> graph
-  voice -- WebRTC audio --> live
-  live <-- sideband WS --> sideband
-  sideband --> graph
-  graph --> llm
-  graph --> tools --> rag
-  API --> db
-```
+![Architecture: the browser streams chat and voice requests to a FastAPI service running one LangGraph agent with tools, a policy engine and hybrid RAG; voice audio goes straight to GPT-Live over WebRTC while the API joins the call over a sideband; OpenAI hosts the models and Supabase Postgres holds all state](docs/architecture.svg)
 
 Audio goes straight from the browser to GPT-Live. The API creates the session and joins it over
-a sideband, so a spoken request runs through the same agent, tools, policy engine, memory and
-tracing as a typed one.
+a sideband WebSocket: GPT-Live hands each spoken request to the API, which runs it through the same
+agent, tools, policy engine, memory and tracing as a typed one, and sends back the answer to say.
+
+**Stack:** Next.js 16, React 19, Tailwind and shadcn/ui · FastAPI, LangGraph, Pydantic · OpenAI
+Responses API, GPT-Live and embeddings · Supabase Postgres with pgvector · Vercel.
 
 ## Design decisions
 
@@ -98,12 +76,12 @@ tracing as a typed one.
 - **Recovery you can see.** Retries and fallbacks happen in our code, not inside an SDK, so each
   attempt is a span in the trace.
 - **Server-only data access.** RLS is on with no policies and public roles have no grants; the
-  browser never talks to the database, and the voice API key never reaches it.
+  browser never talks to the database, and the OpenAI key never reaches it.
 
 ## Running locally
 
-Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22, and a Postgres with
-pgvector (Supabase works).
+Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22, an OpenAI API key, and
+Postgres with pgvector (a Supabase project works as is).
 
 ```bash
 cp .env.example apps/api/.env        # keep the API section, add OPENAI_API_KEY and DATABASE_URL
@@ -114,12 +92,20 @@ make dev-web   # http://localhost:3000
 make check     # lint, types, formatting and tests for both apps
 ```
 
-Apply `supabase/migrations` in order, then load the knowledge base:
-`API_URL=… ADMIN_TOKEN=… uv run python -m scripts.push_kb` from `apps/api`. After changing
-`apps/api/app/contracts`, run `make contracts`.
+Database: on plain Postgres run `supabase/local/bootstrap.sql` first (Supabase already has what it
+sets up), then apply `supabase/migrations` in order; they also seed the demo customers. Load the
+knowledge base with `uv run python -m scripts.ingest_kb` from `apps/api`, or, for a deployed API
+whose database you can't reach directly, `API_URL=… ADMIN_TOKEN=… uv run python -m
+scripts.push_kb`. After changing `apps/api/app/contracts`, run `make contracts`.
 
-Evaluation scripts (from `apps/api`): `scripts.run_evals` (RAG), `scripts.run_scenarios
-[--api URL]` (agent), `scripts.voice_e2e` (a real voice call).
+Evaluations, from `apps/api` (they call the real models):
+
+```bash
+EVAL_DATABASE_URL=… uv run python -m scripts.run_evals       # RAG: 40 labeled questions
+EVAL_DATABASE_URL=… uv run python -m scripts.run_scenarios   # agent: 10 end-to-end scenarios
+uv run python -m scripts.run_scenarios --api https://…       # the same against a deployed API
+EVAL_DATABASE_URL=… uv run python -m scripts.voice_e2e       # a real voice call, synthesized speech
+```
 
 ## Deployment
 

@@ -33,5 +33,5 @@ limit that holds the sideband, and if the browser leaves, the API hangs the sess
 **Tested with real speech.** `apps/api/scripts/voice_e2e.py` places a real GPT-Live call with
 synthesized speech (over WebSocket, since WebRTC needs UDP): a chat turn first, then by voice
 "I was charged twice", a $29 refund, the caller talking over the answer with a new question, and
-a chat turn after the call that knows about the refund. The voice acknowledges within half a
+a chat turn after the call that knows about the refund. The voice acknowledges within a
 second of the caller finishing; a full refund answer is ready about 5 s later.
