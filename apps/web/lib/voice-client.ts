@@ -30,6 +30,8 @@ export interface Call {
 }
 
 const ICE_GATHERING_TIMEOUT_MS = 2_000;
+/** Audio normally connects in about a second; don't leave the caller waiting on a blocked network. */
+const CONNECT_TIMEOUT_MS = 15_000;
 
 function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
@@ -84,21 +86,28 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
       // ignore malformed frames
     }
   });
-  pc.addEventListener("connectionstatechange", () => {
-    if (pc.connectionState === "failed" && !ended) {
-      handlers.onFailure(
-        new CallError("The audio connection failed. A firewall or VPN may be blocking WebRTC.", "connection"),
-      );
-    }
-  });
 
   const cleanup = () => {
     ended = true;
-    abort.abort();
+    clearTimeout(connectTimer);
+    abort.abort(); // closing the stream makes the server hang up the GPT-Live session
     channel.close();
     pc.close();
     for (const track of mic.getTracks()) track.stop();
   };
+  const fail = (error: CallError) => {
+    if (ended) return;
+    cleanup();
+    handlers.onFailure(error);
+  };
+  const blocked = () =>
+    new CallError("The audio connection failed. A firewall or VPN may be blocking WebRTC.", "connection");
+
+  const connectTimer = setTimeout(() => fail(blocked()), CONNECT_TIMEOUT_MS);
+  channel.addEventListener("open", () => clearTimeout(connectTimer));
+  pc.addEventListener("connectionstatechange", () => {
+    if (pc.connectionState === "failed") fail(blocked());
+  });
 
   try {
     await pc.setLocalDescription(await pc.createOffer());
@@ -110,7 +119,7 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
       signal: abort.signal,
     });
     if (!response.ok || !response.body) throw new CallError(`The voice service returned ${response.status}.`, "network");
-    void pump(response.body, pc, handlers, () => ended).finally(() => {
+    void pump(response.body, pc, handlers, () => ended, fail).finally(() => {
       if (!ended) cleanup();
     });
   } catch (error) {
@@ -144,6 +153,7 @@ async function pump(
   pc: RTCPeerConnection,
   handlers: CallHandlers,
   isEnded: () => boolean,
+  fail: (error: CallError) => void,
 ): Promise<void> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
   const parser = new SSEParser();
@@ -164,7 +174,5 @@ async function pump(
   } catch {
     // aborted on hang-up, or the network dropped: handled below
   }
-  if (!finished && !isEnded()) {
-    handlers.onFailure(new CallError("The call dropped.", "network"));
-  }
+  if (!finished && !isEnded()) fail(new CallError("The call dropped.", "network"));
 }
