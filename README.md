@@ -47,7 +47,7 @@ failure** to watch a timeout, rate limit or outage get recovered. **Reset demo**
 - **Voice**: a real GPT-Live call (synthesized speech) refunds by voice, survives an
   interruption, and the chat afterwards remembers it. The voice acknowledges within a second of
   the caller finishing; a full refund answer is ready in about 5 s.
-- **Tests**: 121 API (pytest, real Postgres), 19 web (vitest); CI runs lint, types, formatting,
+- **Tests**: 122 API (pytest, real Postgres), 22 web (vitest); CI runs lint, types, formatting,
   tests, a contract-drift check and a secret scan.
 
 ## Architecture
