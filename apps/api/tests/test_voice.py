@@ -38,12 +38,20 @@ class FakeLink:
         while True:
             yield await self.incoming.get()
 
-    def heard(self, text: str) -> None:
-        self.incoming.put_nowait(SimpleNamespace(type="session.input_transcript.delta", delta=text))
-
-    def delegate(self, delegation_id: str) -> None:
+    def heard(self, text: str, start_ms: int, end_ms: int) -> None:
         self.incoming.put_nowait(
-            SimpleNamespace(type="session.delegation.created", delegation=SimpleNamespace(id=delegation_id))
+            SimpleNamespace(
+                type="session.input_transcript.delta", delta=text, start_ms=start_ms, end_ms=end_ms
+            )
+        )
+
+    def delegate(self, delegation_id: str, offset_ms: int) -> None:
+        self.incoming.put_nowait(
+            SimpleNamespace(
+                type="session.delegation.created",
+                delegation=SimpleNamespace(id=delegation_id),
+                offset_ms=offset_ms,
+            )
         )
 
     def close(self) -> None:
@@ -82,7 +90,8 @@ async def until(condition: Callable[[], bool]) -> None:
 
 
 def bridge_for(link: FakeLink, runner: Callable[[str], AsyncIterator[AgentEvent]], **kw: Any) -> VoiceBridge:
-    return VoiceBridge(link, runner, settle_s=0.05, settle_max_s=0.4, **kw)
+    options: dict[str, Any] = {"transcript_wait_s": 0.5, "transcript_quiet_s": 0.2, **kw}
+    return VoiceBridge(link, runner, **options)
 
 
 async def run_call(bridge: VoiceBridge) -> asyncio.Task[list[VoiceEvent]]:
@@ -99,9 +108,9 @@ async def test_a_spoken_request_runs_the_agent_and_its_answer_is_spoken() -> Non
     link = FakeLink()
     call = await run_call(bridge_for(link, answer_with("You heard: {utterance} [refunds-and-billing#5]")))
 
-    link.heard("I was charged ")
-    link.heard("twice.")
-    link.delegate("d1")
+    link.heard(", I was charged", 1000, 1600)
+    link.heard(" twice.", 1600, 2000)
+    link.delegate("d1", 2000)  # delegated where the caller's last word ended
     await until(lambda: bool(link.spoken()))
     link.close()
     events = await call
@@ -116,17 +125,68 @@ async def test_a_spoken_request_runs_the_agent_and_its_answer_is_spoken() -> Non
 
 async def test_waits_for_words_transcribed_after_the_delegation() -> None:
     link = FakeLink()
-    call = await run_call(bridge_for(link, answer_with("{utterance}")))
+    call = await run_call(bridge_for(link, answer_with("{utterance}"), transcript_quiet_s=5))
 
-    link.heard("Can I get ")
-    link.delegate("d1")
-    await asyncio.sleep(0.02)
-    link.heard("a refund?")  # arrives just after the delegation, as it can live
+    link.heard("Can I get", 1000, 1400)
+    link.delegate("d1", 2000)
+    await asyncio.sleep(0.1)
+    link.heard(" a refund?", 1400, 2000)  # on WebRTC the transcript can trail the delegation
     await until(lambda: bool(link.spoken()))
     link.close()
     await call
 
     assert link.spoken() == [("d1", "Can I get a refund?")]
+
+
+async def test_requests_are_split_where_each_was_delegated() -> None:
+    link = FakeLink()
+    turns: list[str] = []
+    gate = asyncio.Event()
+
+    async def runner_with_gate(utterance: str) -> AsyncIterator[AgentEvent]:
+        turns.append(utterance)
+        async for event in answer_with("ok", gate if len(turns) == 1 else None)(utterance):
+            yield event
+
+    call = await run_call(bridge_for(link, runner_with_gate))
+    # Both requests' words are in before the first one is handled.
+    link.heard("What's my plan?", 1000, 2000)
+    link.delegate("d1", 2000)
+    link.heard(" And my charges?", 3000, 3600)
+    link.delegate("d2", 3600)
+    await until(lambda: len(turns) == 1)
+    link.heard(" uh", 1800, 1900)  # a straggler for the first request, after it was taken: dropped
+    await asyncio.sleep(0.05)
+    gate.set()
+    await until(lambda: len(turns) == 2 and len(link.spoken()) == 1)
+    link.close()
+    await call
+
+    assert turns == ["What's my plan?", "And my charges?"]
+
+
+async def test_words_running_on_past_the_delegation_stay_with_the_request() -> None:
+    link = FakeLink()
+    turns: list[str] = []
+
+    async def runner(utterance: str) -> AsyncIterator[AgentEvent]:
+        turns.append(utterance)
+        async for event in answer_with("ok")(utterance):
+            yield event
+
+    call = await run_call(bridge_for(link, runner))
+    link.heard("Can you fix that", 1000, 2000)
+    link.delegate("d1", 2000)  # GPT-Live delegated a beat early...
+    await asyncio.sleep(0.1)
+    link.heard(", please?", 2100, 2500)  # ...and the caller wasn't quite done
+    await until(lambda: len(turns) == 1)
+    link.heard(" What's my plan?", 6000, 7000)
+    link.delegate("d2", 7000)
+    await until(lambda: len(turns) == 2)
+    link.close()
+    await call
+
+    assert turns == ["Can you fix that, please?", "What's my plan?"]
 
 
 async def test_an_answer_the_caller_moved_on_from_is_context_not_speech() -> None:
@@ -136,17 +196,16 @@ async def test_an_answer_the_caller_moved_on_from_is_context_not_speech() -> Non
 
     async def runner(utterance: str) -> AsyncIterator[AgentEvent]:
         turns.append(utterance)
-        async for event in answer_with("Answer to: {utterance}", gate if len(turns) == 1 else None)(
-            utterance
-        ):
+        first = len(turns) == 1
+        async for event in answer_with("Answer to: {utterance}", gate if first else None)(utterance):
             yield event
 
     call = await run_call(bridge_for(link, runner))
-    link.heard("What's my plan?")
-    link.delegate("d1")
+    link.heard("What's my plan?", 1000, 2000)
+    link.delegate("d1", 2000)
     await until(lambda: len(turns) == 1)
-    link.heard("Actually, refund my duplicate charge.")  # interrupts with a new request
-    link.delegate("d2")
+    link.heard(" Actually, refund my duplicate charge.", 4000, 6000)  # cuts in with a new request
+    link.delegate("d2", 6000)
     await asyncio.sleep(0.05)
     gate.set()
     await until(lambda: bool(link.spoken()))
@@ -162,8 +221,8 @@ async def test_an_answer_the_caller_moved_on_from_is_context_not_speech() -> Non
 
 async def test_nothing_heard_asks_the_caller_to_repeat() -> None:
     link = FakeLink()
-    call = await run_call(bridge_for(link, answer_with("unused")))
-    link.delegate("d1")
+    call = await run_call(bridge_for(link, answer_with("unused"), transcript_wait_s=0.1))
+    link.delegate("d1", 2000)
     await until(lambda: bool(link.spoken()))
     link.close()
     events = await call
@@ -180,14 +239,32 @@ async def test_a_failed_turn_is_reported_and_the_caller_hears_an_apology() -> No
         yield  # pragma: no cover
 
     call = await run_call(bridge_for(link, broken))
-    link.heard("Refund me.")
-    link.delegate("d1")
+    link.heard("Refund me.", 1000, 2000)
+    link.delegate("d1", 2000)
     await until(lambda: bool(link.spoken()))
     link.close()
     events = await call
 
     assert [e.type for e in events] == ["voice_turn", "error", "done", "voice_ended"]
     assert link.spoken() == [("d1", FAILED)]
+
+
+async def test_hanging_up_mid_turn_still_finishes_the_turn() -> None:
+    link = FakeLink()
+    gate = asyncio.Event()
+    call = await run_call(bridge_for(link, answer_with("Refunded $29.", gate)))
+    link.heard("Refund my duplicate charge.", 1000, 2000)
+    link.delegate("d1", 2000)
+    await asyncio.sleep(0.1)  # the turn is now running, held at the gate
+    link.heard("Hello?", 5000, 5500)
+    link.delegate("d2", 5500)  # queued behind the running turn
+    link.close()  # the caller hangs up while the refund is still being worked on
+    await asyncio.sleep(0.05)
+    gate.set()
+    events = await call
+
+    assert [e.type for e in events] == ["voice_turn", "step", "step", "token", "done", "voice_ended"]
+    assert link.spoken() == []  # nobody left to hear it; the answer is in the conversation
 
 
 async def test_the_call_is_closed_at_the_time_limit() -> None:

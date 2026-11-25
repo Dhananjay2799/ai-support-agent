@@ -1,16 +1,19 @@
 """Runs a support call: GPT-Live talks, our agent graph decides.
 
 GPT-Live (client delegation) listens and speaks. Whenever the caller asks for something,
-it emits `session.delegation.created`, which carries no text: the request is whatever the
-caller said since the previous delegation, rebuilt from input transcript deltas. The bridge
-runs that utterance through the agent graph, on the same session as chat, streams the
-turn's events to the browser, and hands the answer back with `session.commentary.append`
-for GPT-Live to say.
+it emits `session.delegation.created`, which carries no text, only `offset_ms`: where on
+the session timeline it was delegated (the end of the caller's last word). Transcript
+words carry timestamps on the same timeline, so the request is every word spoken before
+that offset and after the previous one. Words can arrive after the delegation, so the
+bridge waits until the transcript reaches the offset. It then runs the request through
+the agent graph, on the same session as chat, streams the turn's events to the browser,
+and hands the answer back with `session.commentary.append` for GPT-Live to say.
 
 Delegations run one at a time, in order: two turns can't write the same checkpoint at
 once. If the caller has already moved on to a new request when a turn finishes (they
 interrupted), its result goes in as silent context (`session.thinking.append`) so the
-voice doesn't answer a question the caller abandoned.
+voice doesn't answer a question the caller abandoned. If the call ends mid-turn, the turn
+still finishes, so its answer and any refund or ticket show up in the conversation.
 """
 
 import asyncio
@@ -32,6 +35,16 @@ log = logging.getLogger(__name__)
 CITATION_MARKER = re.compile(r"\s*\[[a-z0-9-]+#\d+\]")
 MAX_SPOKEN_CHARS = 1_600  # commentary is capped at 500 tokens
 DIDNT_CATCH = "I didn't catch that. Could you say it again?"
+TRANSCRIPT_WAIT_S = 3.0  # most a request waits for its words to be transcribed
+TRANSCRIPT_QUIET_S = 1.5  # ...or this long without new words, once some have arrived
+WORD_END_SLACK_MS = 300  # a word ending this close to the offset means the transcript caught up
+# GPT-Live may delegate a beat before the caller finishes ("...can you fix that" | "please").
+# Words running straight on from a request that hasn't ended its sentence still belong to it.
+TAIL_WAIT_S = 0.8
+TAIL_MS = 1_000  # how far past the offset such a word may start
+CONTIGUOUS_MS = 600  # the most silence between words of one request
+SENTENCE_END = re.compile(r"[.?!]\W*$")
+FINISH_TURN_S = 30.0  # after the call ends, how long an in-flight turn may still run
 FAILED = "Sorry, something went wrong on my side. Could you say that again?"
 
 
@@ -54,32 +67,66 @@ def speakable(text: str) -> str:
     return spoken
 
 
+@dataclass(frozen=True)
+class Word:
+    text: str
+    start_ms: int
+    end_ms: int
+
+
+@dataclass(frozen=True)
+class Delegation:
+    id: str
+    offset_ms: int
+
+
+_CLOSED = object()  # the GPT-Live session is over
+_IDLE = object()  # the worker finished a turn
+
+
 @dataclass
 class VoiceBridge:
     link: LiveLink
     run_turn: TurnRunner
     max_seconds: float = MAX_CALL_SECONDS
-    settle_s: float = 0.4  # transcript quiet this long = the caller's words are in
-    settle_max_s: float = 1.5
+    transcript_wait_s: float = TRANSCRIPT_WAIT_S
+    transcript_quiet_s: float = TRANSCRIPT_QUIET_S
+    finish_turn_s: float = FINISH_TURN_S
 
-    _heard: list[str] = field(default_factory=list)
-    _cut: int = 0
-    _last_heard: float = 0.0
-    _delegations: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
-    _out: asyncio.Queue[VoiceEvent | None] = field(default_factory=asyncio.Queue)
+    _words: list[Word] = field(default_factory=list)
+    _taken_until_ms: int = -1  # words starting before this belong to an earlier request
+    _last_word_at: float = 0.0
+    _word_arrived: asyncio.Event = field(default_factory=asyncio.Event)
+    _delegations: asyncio.Queue[Delegation] = field(default_factory=asyncio.Queue)
+    _out: asyncio.Queue[Any] = field(default_factory=asyncio.Queue)
+    _closed: bool = False
+    _in_turn: bool = False
     _reason: VoiceEndReason | None = None
 
     async def events(self) -> AsyncIterator[VoiceEvent]:
-        """Yield the call's events until GPT-Live closes the session."""
+        """Yield the call's events until the session closes and any turn in flight is done."""
         started = time.monotonic()
         worker = asyncio.create_task(self._work())
         timer = asyncio.create_task(self._time_limit())
         reader = asyncio.create_task(self._read())
-        reader.add_done_callback(lambda _: self._out.put_nowait(None))
+        reader.add_done_callback(lambda _: self._out.put_nowait(_CLOSED))
+        finish_by: float | None = None
         try:
-            while (event := await self._out.get()) is not None:
-                yield event
-            if reader.exception() is not None:
+            while True:
+                if finish_by is not None and not self._in_turn and self._out.empty():
+                    break  # closed, no turn running, and everything it produced is sent
+                timeout = None if finish_by is None else max(0.0, finish_by - time.monotonic())
+                try:
+                    item = await asyncio.wait_for(self._out.get(), timeout)
+                except TimeoutError:
+                    log.warning("voice turn still running %.0f s after the call ended", self.finish_turn_s)
+                    break
+                if item is _CLOSED:
+                    self._closed = True
+                    finish_by = time.monotonic() + self.finish_turn_s
+                elif item is not _IDLE:
+                    yield item
+            if not reader.cancelled() and reader.exception() is not None:
                 log.error("voice session connection failed", exc_info=reader.exception())
                 self._reason = "error"
             yield VoiceEndedEvent(
@@ -96,10 +143,14 @@ class VoiceBridge:
         async for event in self.link:
             kind = getattr(event, "type", None)
             if kind == "session.input_transcript.delta":
-                self._heard.append(event.delta)
-                self._last_heard = time.monotonic()
+                if event.start_ms < self._taken_until_ms:
+                    log.info("dropping late word %r of an earlier request", event.delta)
+                    continue
+                self._words.append(Word(event.delta, event.start_ms, event.end_ms))
+                self._last_word_at = time.monotonic()
+                self._word_arrived.set()
             elif kind == "session.delegation.created":
-                self._delegations.put_nowait(event.delegation.id)
+                self._delegations.put_nowait(Delegation(event.delegation.id, event.offset_ms))
             elif kind == "error":
                 log.warning("GPT-Live error event: %s", getattr(event, "error", event))
             elif kind == "session.closed":
@@ -112,13 +163,26 @@ class VoiceBridge:
 
     async def _work(self) -> None:
         while True:
-            delegation_id = await self._delegations.get()
-            utterance = await self._take_utterance()
+            delegation = await self._delegations.get()
+            if self._closed:
+                return
+            delegation_id = delegation.id
+            utterance = await self._take_utterance(delegation.offset_ms)
+            log.info("delegation %s at %d ms: %r", delegation_id, delegation.offset_ms, utterance[:160])
             if not utterance:
                 await self._speak(delegation_id, DIDNT_CATCH)
                 continue
-            self._out.put_nowait(VoiceTurnEvent(utterance=utterance))
-            answer = await self._run(delegation_id, utterance)
+            if self._closed:
+                return
+            self._in_turn = True
+            try:
+                self._out.put_nowait(VoiceTurnEvent(utterance=utterance))
+                answer = await self._run(delegation_id, utterance)
+            finally:
+                self._in_turn = False
+                self._out.put_nowait(_IDLE)
+            if self._closed:
+                return  # nobody left to say it to; the answer is in the conversation
             if self._delegations.empty():
                 await self._speak(delegation_id, answer)
             else:  # the caller has already asked something else
@@ -132,21 +196,60 @@ class VoiceBridge:
 
     # --- helpers ---------------------------------------------------------------------
 
-    async def _take_utterance(self) -> str:
-        """Everything heard since the last request, once the transcript has caught up.
+    async def _take_utterance(self, offset_ms: int) -> str:
+        """The words of the request delegated at `offset_ms`.
 
-        Delegation can fire before the last words are transcribed, so wait until no new
-        words have arrived for `settle_s` (at most `settle_max_s`).
+        Waits until the transcript reaches the offset (a word ending near it, or one starting
+        after it), or has been quiet for a while, or `transcript_wait_s` at most. Then takes
+        the words that started before the offset; later ones belong to the next request.
         """
-        deadline = time.monotonic() + self.settle_max_s
-        while time.monotonic() < deadline:
-            quiet = time.monotonic() - self._last_heard >= self.settle_s
-            if quiet and len(self._heard) > self._cut:
+
+        def caught_up() -> bool:
+            return any(
+                w.end_ms >= offset_ms - WORD_END_SLACK_MS or w.start_ms >= offset_ms for w in self._words
+            )
+
+        deadline = time.monotonic() + self.transcript_wait_s
+        while time.monotonic() < deadline and not caught_up():
+            pending = any(w.start_ms < offset_ms for w in self._words)
+            if pending and time.monotonic() - self._last_word_at >= self.transcript_quiet_s:
                 break
-            await asyncio.sleep(0.05)
-        utterance = "".join(self._heard[self._cut :]).strip()
-        self._cut = len(self._heard)
-        return utterance
+            await self._next_word(deadline)
+
+        before = sorted((w for w in self._words if w.start_ms < offset_ms), key=lambda w: w.start_ms)
+        if before and not SENTENCE_END.search(before[-1].text):
+            tail_deadline = time.monotonic() + TAIL_WAIT_S
+            while time.monotonic() < tail_deadline and not self._tail_settled(before[-1], offset_ms):
+                await self._next_word(tail_deadline)
+
+        words = before
+        later = sorted((w for w in self._words if w.start_ms >= offset_ms), key=lambda w: w.start_ms)
+        for word in later:
+            if word.start_ms >= offset_ms + TAIL_MS or word.start_ms - words[-1].end_ms > CONTIGUOUS_MS:
+                break
+            words = [*words, word]
+        taken = set(map(id, words))
+        self._words = [w for w in self._words if id(w) not in taken]
+        self._taken_until_ms = max(self._taken_until_ms, offset_ms, words[-1].end_ms if words else -1)
+        return re.sub(r"^[\s,;:.]+", "", "".join(w.text for w in words)).strip()
+
+    async def _next_word(self, deadline: float) -> None:
+        """Wait for the next transcript word, at most until `deadline` (and 0.1 s at a time)."""
+        self._word_arrived.clear()
+        timeout = min(0.1, max(0.0, deadline - time.monotonic()))
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._word_arrived.wait(), timeout)
+
+    def _tail_settled(self, last: Word, offset_ms: int) -> bool:
+        """True once no more words can run on from `last`: a gap or a sentence end has arrived."""
+        end = last.end_ms
+        for word in sorted((w for w in self._words if w.start_ms >= offset_ms), key=lambda w: w.start_ms):
+            if word.start_ms - end > CONTIGUOUS_MS or word.start_ms >= offset_ms + TAIL_MS:
+                return True
+            if SENTENCE_END.search(word.text):
+                return True
+            end = word.end_ms
+        return False
 
     async def _run(self, delegation_id: str, utterance: str) -> str:
         """One agent turn; streams its events and returns the text to speak."""

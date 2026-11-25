@@ -20,6 +20,8 @@ export interface CallHandlers {
   onLiveEvent: (event: LiveEvent) => void;
   /** The call ended or failed for a reason the stream couldn't report. */
   onFailure: (error: CallError) => void;
+  /** The server stream is over: no more turn events will arrive. Called once. */
+  onClosed: () => void;
 }
 
 export interface Call {
@@ -32,6 +34,8 @@ export interface Call {
 const ICE_GATHERING_TIMEOUT_MS = 2_000;
 /** Audio normally connects in about a second; don't leave the caller waiting on a blocked network. */
 const CONNECT_TIMEOUT_MS = 15_000;
+/** After hanging up, how long to keep listening for a turn the agent is still finishing. */
+const FINISH_TURN_MS = 35_000;
 
 function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
@@ -71,7 +75,8 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
   const mic = await openMicrophone();
   const pc = new RTCPeerConnection();
   const abort = new AbortController();
-  let ended = false;
+  let ended = false; // torn down: no audio, no stream
+  let hungUp = false; // the caller hung up; the stream may still deliver a finishing turn
 
   const agent = new Promise<MediaStream>((resolve) => {
     pc.addEventListener("track", (event) => resolve(event.streams[0] ?? new MediaStream([event.track])));
@@ -87,13 +92,16 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
     }
   });
 
-  const cleanup = () => {
-    ended = true;
+  const stopAudio = () => {
     clearTimeout(connectTimer);
-    abort.abort(); // closing the stream makes the server hang up the GPT-Live session
     channel.close();
     pc.close();
     for (const track of mic.getTracks()) track.stop();
+  };
+  const cleanup = () => {
+    ended = true;
+    stopAudio();
+    abort.abort(); // closing the stream makes the server hang up the GPT-Live session
   };
   const fail = (error: CallError) => {
     if (ended) return;
@@ -119,8 +127,9 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
       signal: abort.signal,
     });
     if (!response.ok || !response.body) throw new CallError(`The voice service returned ${response.status}.`, "network");
-    void pump(response.body, pc, handlers, () => ended, fail).finally(() => {
+    void pump(response.body, pc, handlers, () => ended || hungUp, fail).finally(() => {
       if (!ended) cleanup();
+      handlers.onClosed();
     });
   } catch (error) {
     cleanup();
@@ -138,12 +147,16 @@ export async function startCall(request: Omit<VoiceRequest, "sdp">, handlers: Ca
       for (const track of mic.getAudioTracks()) track.enabled = !muted;
     },
     async hangUp() {
-      if (ended) return;
-      // Ask GPT-Live to close gracefully so the server sees `session.closed` and ends its
-      // stream; tear down regardless after a moment.
+      if (ended || hungUp) return;
+      hungUp = true;
+      // Ask GPT-Live to close gracefully, then stop the audio. Keep the stream open: the
+      // server finishes any turn in progress and ends it with `voice_ended`.
       if (channel.readyState === "open") channel.send(JSON.stringify({ type: "session.close" }));
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
-      cleanup();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      stopAudio();
+      setTimeout(() => {
+        if (!ended) cleanup();
+      }, FINISH_TURN_MS);
     },
   };
 }

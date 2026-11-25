@@ -13,6 +13,8 @@ export interface VoiceCallOptions {
   onVoiceTurn: (utterance: string) => void;
   /** An event of the current voice turn. Returns false if no turn is in progress. */
   onAgentEvent: (event: AgentEvent) => boolean;
+  /** The call's stream is over; a voice turn still in progress won't get more events. */
+  onCallClosed: () => void;
 }
 
 export interface VoiceCall {
@@ -25,15 +27,21 @@ export interface VoiceCall {
   dismiss: () => void;
 }
 
-export function useVoiceCall({ sessionId, personaId, onVoiceTurn, onAgentEvent }: VoiceCallOptions): VoiceCall {
+export function useVoiceCall({
+  sessionId,
+  personaId,
+  onVoiceTurn,
+  onAgentEvent,
+  onCallClosed,
+}: VoiceCallOptions): VoiceCall {
   const [state, setState] = useState<CallState | null>(null);
   const [mic, setMic] = useState<MediaStream | null>(null);
   const [agent, setAgent] = useState<MediaStream | null>(null);
   const callRef = useRef<Call | null>(null);
-  const handlers = useRef({ onVoiceTurn, onAgentEvent });
+  const handlers = useRef({ onVoiceTurn, onAgentEvent, onCallClosed });
   useEffect(() => {
-    handlers.current = { onVoiceTurn, onAgentEvent };
-  }, [onVoiceTurn, onAgentEvent]);
+    handlers.current = { onVoiceTurn, onAgentEvent, onCallClosed };
+  }, [onVoiceTurn, onAgentEvent, onCallClosed]);
 
   const update = useCallback((change: (state: CallState) => CallState) => {
     setState((current) => (current ? change(current) : current));
@@ -53,6 +61,7 @@ export function useVoiceCall({ sessionId, personaId, onVoiceTurn, onAgentEvent }
         {
           onLiveEvent: (event) => update((s) => applyLiveEvent(s, event)),
           onFailure: (error) => fail(error.message),
+          onClosed: () => handlers.current.onCallClosed(),
           onVoiceEvent: (event) => {
             switch (event.type) {
               case "voice_session":

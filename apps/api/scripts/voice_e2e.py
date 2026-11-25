@@ -82,7 +82,13 @@ class Observer:
             kind = getattr(event, "type", "")
             if kind.endswith("_transcript.delta"):
                 self.timeline.append(
-                    {"type": kind, "delta": event.delta, "start_ms": event.start_ms, "end_ms": event.end_ms}
+                    {
+                        "type": kind,
+                        "delta": event.delta,
+                        "start_ms": event.start_ms,
+                        "end_ms": event.end_ms,
+                        "wall_s": round(self.now(), 2),
+                    }
                 )
             if kind == "session.started":
                 self.session_started.set()
@@ -93,7 +99,10 @@ class Observer:
             elif kind == "session.input_transcript.delta":
                 self.heard.append(event.delta)
             elif kind == "session.delegation.created":
-                print(f"  [{self.now():5.1f}s] <- delegation {event.delegation.id}")
+                print(f"  [{self.now():5.1f}s] <- delegation {event.delegation.id} at {event.offset_ms} ms")
+                self.timeline.append(
+                    {"type": kind, "offset_ms": event.offset_ms, "wall_s": round(self.now(), 2)}
+                )
             elif kind == "error":
                 print(f"  [{self.now():5.1f}s] <- error {event}")
             yield event

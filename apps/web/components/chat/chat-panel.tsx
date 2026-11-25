@@ -56,11 +56,22 @@ export function ChatPanel({ persona }: { persona: Persona }) {
     },
     [updateAssistant],
   );
+  const onCallClosed = useCallback(() => {
+    const id = voiceTurnRef.current;
+    voiceTurnRef.current = null;
+    if (!id) return;
+    updateAssistant(id, (turn) =>
+      turn.status === "streaming"
+        ? { ...turn, status: "error", error: { message: "The call ended before this answer finished.", retryable: false } }
+        : turn,
+    );
+  }, [updateAssistant]);
   const call = useVoiceCall({
     sessionId,
     personaId: apiPersonaId(persona),
     onVoiceTurn,
     onAgentEvent: onVoiceAgentEvent,
+    onCallClosed,
   });
   const onCall = call.state?.status === "connecting" || call.state?.status === "live";
 
