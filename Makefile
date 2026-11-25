@@ -19,7 +19,7 @@ contracts:          ## Regenerate the JSON Schema and TypeScript types from the 
 
 lint:
 	$(API) uv run ruff check . && uv run ruff format --check .
-	$(WEB) npm run lint
+	$(WEB) npm run lint && npm run format:check
 
 typecheck:
 	$(API) uv run mypy

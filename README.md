@@ -1,290 +1,146 @@
 # AI Support Agent
 
-A customer support agent for **Acme Cloud** (a fictional file-sync SaaS) that answers in streaming
-chat and live voice, chains tool calls to verify customers and act on their accounts, grounds every
-answer in a policy knowledge base, and hands low-confidence cases to a human.
+A customer support agent for **Acme Cloud**, a fictional file-sync SaaS. It answers in streaming
+chat and live voice with one shared memory. It verifies the customer and acts on their account
+through chained tool calls, grounds every answer in a policy knowledge base, and hands anything
+it can't support to a person. Every turn is traced, and failures are recovered visibly.
 
-> **Status: Day 5 of 7.** Text and voice share one agent and one memory. The agent verifies the
-> customer, reads their account, checks policy and refunds or escalates, with citations and a
-> ticket card; 10 end-to-end scenarios pass against the deployed API. Calls run on GPT-Live with
-> live captions, a waveform and interruptions. Every turn is traced (prompts, latency, tokens,
-> cost) in an observability drawer, and failures are recovered visibly.
+**[Live demo](https://web-pied-five-42.vercel.app)** · [API health](https://api-five-pied-65.vercel.app/health) ·
+Loom walkthrough: _link to come_
+
+## Try it
+
+Pick a customer in the header; the demo signs them in.
+
+| Customer | Try | What happens |
+| --- | --- | --- |
+| Priya (Pro) | "I was charged twice this month" | Verifies her, reads the account, checks policy, refunds $29, cites the rule |
+| Priya | The same again, or "Can I pay with PayPal?" | No second refund; PayPal isn't documented, so a person gets a ticket |
+| Marcus (Free) | A refund for his storage add-on | Declined, citing the Free-plan rule |
+| Elena (Enterprise) | Refund her $1,200 charge | Over the $500 limit: a high-priority ticket with a 4-hour SLA |
+| Tom (Pro, past due) | Refund last month's charge | Declined until the account is in good standing |
+| Guest | Ask for a refund | Must verify by email and ZIP; three misses lock the chat |
+
+Then press the **phone** button and say the same things; interrupt it mid-answer. Open **Traces**
+to see every model call, tool and check, with latency, tokens and cost, and use **Simulate a
+failure** to watch a timeout, rate limit or outage get recovered. **Reset demo** restores the data.
+
+## What the brief asked for
+
+| Requirement | How | Proof |
+| --- | --- | --- |
+| Streaming chat with step indicators | SSE over POST; each tool streams a step with its result | [Contract](apps/api/app/contracts/events.py) generates the UI's types |
+| Live voice: waveform, transcripts, interruption | GPT-Live over WebRTC; the server joins over a sideband and runs the same agent | Real call with synthesized speech, [docs/voice.md](docs/voice.md) |
+| Observability drawer | Per-turn span tree: prompts, outputs, latency, TTFT, tokens, cost | [docs/observability.md](docs/observability.md) |
+| RAG, custom chunking, confidence guardrails | Heading-aware chunks, hybrid pgvector + full-text search, a similarity gate and support judge | 0 unsafe answers in a 40-question eval, [docs/rag.md](docs/rag.md) |
+| Autonomous loop with 3+ tools | LangGraph: verify → account → policy → refund or ticket, in one turn | 10/10 end-to-end scenarios on the live API, [docs/agent.md](docs/agent.md) |
+| Error recovery | Visible retries, a fallback model, tool retries, graceful outages | Each path tested and simulated live |
+| Shared memory across text and voice | One Postgres-checkpointed thread per conversation | Chat → call → chat recalls the refund |
+
+## Results
+
+- **RAG** ([evals/results.md](evals/results.md)): the right policy section is in the top 3 for
+  every answerable question; **0** of 15 should-escalate questions were answered (a similarity
+  cut-off alone answered 2); escalation precision and recall 100%.
+- **Agent** ([evals/agent_scenarios.md](evals/agent_scenarios.md)): 10/10 scenarios against the
+  deployed API with the real model, including prompt injection and asking twice for a refund.
+- **Voice**: a real GPT-Live call (synthesized speech) refunds by voice, survives an
+  interruption, and the chat afterwards remembers it. Acknowledgement within half a second of the
+  caller finishing; a full refund answer in about 5 s.
+- **Tests**: 121 API (pytest, real Postgres), 19 web (vitest); CI runs lint, types, formatting,
+  tests, a contract-drift check and a secret scan.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   subgraph Browser["Next.js UI (Vercel)"]
-    chat[Chat + step status]
+    chat[Chat + steps]
     voice[Voice: waveform, captions]
-    drawer[Observability drawer]
+    drawer[Traces drawer]
   end
-  subgraph API["FastAPI service (Vercel Functions)"]
-    graph[Agent graph<br/>LangGraph]
+  subgraph API["FastAPI (Vercel Functions)"]
+    graph[LangGraph agent]
     sideband[Voice sideband]
     tools[Tools + policy engine]
     rag[RAG + guardrails]
-    tracer[Tracer + rate limits]
+    obs[Tracing, limits]
   end
-  db[(Supabase Postgres<br/>pgvector · CRM · traces)]
-  openai[OpenAI voice model]
-  llm[Text LLM]
+  db[(Supabase Postgres<br/>pgvector · CRM · checkpoints · traces)]
+  live[GPT-Live]
+  llm[OpenAI Responses<br/>gpt-6-luna, fallback gpt-5.4-mini]
 
   chat -- "POST /chat (SSE)" --> graph
-  voice -- WebRTC audio --> openai
-  openai <-- sideband WS --> sideband
+  voice -- WebRTC audio --> live
+  live <-- sideband WS --> sideband
+  sideband --> graph
   graph --> llm
-  graph --> tools
-  sideband --> tools
-  tools --> rag
+  graph --> tools --> rag
   API --> db
 ```
 
-Audio goes straight from the browser to OpenAI; the server joins the same call over a sideband
-connection, so chat and voice share one tool layer, one policy engine and one trace.
+Audio goes straight from the browser to GPT-Live. The API creates the session and joins it over
+a sideband, so a spoken request runs through the same agent, tools, policy engine, memory and
+tracing as a typed one.
 
-## Agent
+## Design decisions
 
-A LangGraph state machine (`apps/api/app/agent/graph.py`) runs each chat turn:
-
-```text
-start_turn -> agent (model) -> tools -> agent -> ... -> finalize
-                    \-> escalate (step cap, failed verification, low confidence) -/
-```
-
-The model (OpenAI Responses API) picks tools; the graph runs them in order, streams a status step
-for each with its result (`Priya Shah · Pro · active`, `$29.00 refunded · re_…`) and feeds the
-outputs back. State is checkpointed in Postgres per session, so the next message, or a voice call
-in the same session, picks up the verified customer and the conversation.
-
-| Tool | What it does |
-| --- | --- |
-| `verify_customer` | Signed-in persona, or email + billing ZIP. Three misses lock the session and open a ticket. |
-| `get_account` | Plan, contract status and recent charges (only after verification). |
-| `search_policies` | Hybrid retrieval + confidence guardrail; a weak match forces escalation. |
-| `issue_refund` | Runs the policy engine first; idempotent per charge, so a retry can't refund twice. |
-| `create_escalation_ticket` | Opens a ticket with priority and the plan's first-reply SLA. |
-
-**The model proposes, code decides.** Refund limits, windows and eligibility are enforced in
-`app/policy/engine.py`, not in the prompt. In the prompt-injection scenario the model did try a
-$5,000 refund, and the engine refused it (`exceeds charge`). Testing on the live site turned up
-one rule that lived only in the docs: asked again in a new conversation, the agent refunded the
-original charge of an already-refunded duplicate pair. The engine now enforces "keep the
-original" itself: a second refund on a duplicate pair goes to a person. Citations are checked against the
-passages actually retrieved that turn, and made-up ones are dropped before they reach the UI.
-
-**Failure handling.** See [Error recovery](#error-recovery): retries, a fallback model and
-graceful tool failures, each visible in the turn's trace. More than 8 model calls in a turn hands
-over to a person.
-
-**Scenarios** (`apps/api/scripts/run_scenarios.py`, real model, against the deployed API; results
-in `evals/agent_scenarios.md`):
-
-| Customer | Asks | Outcome |
-| --- | --- | --- |
-| Priya (Pro) | "I was charged twice this month" | Verify, account, policy, $29 refunded, all in one turn |
-| Priya, again | The same, in a new conversation | No second refund: the original charge is kept |
-| Marcus (Free) | Refund for a storage add-on | Declined with the cited Free-plan rule |
-| Elena (Enterprise) | Refund $1,200 | Engine blocks it (over the $500 limit), high-priority ticket, 4-hour SLA |
-| Tom (Pro, past due) | Refund last month's charge | Declined: account must be in good standing |
-| Guest | Three wrong email/ZIP pairs | Locked, ticket opened |
-| Priya | "Can I pay with PayPal?" | Not in the docs, so escalated instead of guessed |
-| Priya | Prompt injection for $5,000 | No refund |
-| Priya | Weather in Boston | One-sentence decline, no tools |
-
-Pick a customer in the header of the live demo to try each one.
-
-## RAG and confidence guardrails
-
-Results from `evals/results.md` (40 labeled questions: 25 answerable, 10 off-topic, 5 on-topic
-but not covered by the docs, the case where support bots tend to make things up):
-
-| | Result |
-| --- | --- |
-| Right policy section in the top 3 passages | 100% (ranked first: 92%) |
-| Questions that should escalate but got answered | **0** |
-| Escalation precision / recall | 100% / 100% |
-| Best single similarity cut-off, no judge | 2 unsafe answers |
-| Heading-aware vs fixed 512-token chunks | answer reaches the model 100% vs 96% of the time, with 240 vs 1,131 context tokens |
-
-**Chunking.** Docs split on H2/H3 headings so each policy clause stays whole, with a breadcrumb
-(`Refunds and billing > Free plan add-ons`) embedded alongside the text. Sections that apply to
-fewer plans say so (`<!-- tiers: enterprise -->`), so tier filtering works per clause, not per
-document. Tables are never split.
-
-**Retrieval.** One SQL query runs pgvector cosine search and Postgres full-text search, merges them
-with reciprocal rank fusion and filters by the customer's plan. Error codes such as `E-409` are
-indexed as one token, because Postgres otherwise splits them and every code matches every other.
-
-**Guardrails.** Below the `low` similarity cut-off, escalate without an LLM call. Above it, a
-judge model (structured output) must confirm that a retrieved passage states the answer, citing
-passage ids we check against what was retrieved. `low` sits 0.05 below the weakest answerable
-question in the eval; `high` only sets the confidence shown. The judge originally ran only between
-the two, but the agent writes its own search queries, and a keyword-dense rewrite of the PayPal
-question scored like a real match. The judge also gets the customer's plan, and grades policy, not
-account facts: "refund policy for my $29 charge from last month" is answerable if the refund rules
-are there, while every undocumented question still came back 0/6 unanswerable.
-
-Refund limits, windows and response times live in `policy.yaml`; the policy engine enforces them
-and a test fails if the knowledge base states different numbers.
-
-## Voice
-
-Press the phone button to talk to the same agent. GPT-Live (`gpt-live-1.1`) does the listening,
-speaking and turn-taking; our backend makes every decision.
-
-```text
-browser ──WebRTC audio──▶ GPT-Live ◀──sideband WebSocket── API ──▶ same LangGraph agent + memory
-   ▲  data channel: captions          (delegations, spoken answers)        │
-   └──────────── SSE: SDP answer, then each turn's steps, citations, tickets ┘
-```
-
-1. The browser posts its WebRTC offer to `POST /voice`. The API creates the GPT-Live session (the
-   API key never reaches the browser), seeded with the chat so far, and streams back the answer.
-2. The same request then attaches a **sideband** to the session and stays on it for the call.
-   With client delegation, GPT-Live hands over each request; the delegation carries no text, so
-   the API rebuilds what the caller said from transcript deltas and runs it through the agent
-   graph on the conversation's thread. The answer goes back as `session.commentary.append`, and
-   GPT-Live says it in its own words while the steps, sources and any ticket appear on screen.
-3. Typing after the call continues the same conversation, and a call started mid-chat knows what
-   was said.
-
-**Interruptions.** GPT-Live stops talking when the caller cuts in. Requests run in order, so two
-turns never write the same memory at once; if the caller has moved on when a turn finishes, its
-result goes in as silent context (`session.thinking.append`) instead of answering a question
-they abandoned. The UI marks a cut-off line as *interrupted*. The rule was tuned on a recorded
-call (`apps/web/lib/__fixtures__/voice-interruption.json`), where transcript timing showed the
-caller's words landing a second after the agent's last ones.
-
-**Safety and limits.** The browser's data channel may only hang up and mute; only the server can
-speak for the backend. Calls are capped at 3 minutes so they end well inside the 300 s serverless
-limit that holds the sideband, and if the browser leaves, the API hangs the session up.
-
-**Tested with real speech.** `apps/api/scripts/voice_e2e.py` places a real GPT-Live call with
-synthesized speech (over WebSocket, since WebRTC needs UDP): a chat turn first, then by voice
-"I was charged twice", a $29 refund, the caller talking over the answer with a new question, and
-a chat turn after the call that knows about the refund. The voice acknowledges within half a
-second of the caller finishing; a full refund answer is ready about 5 s later.
-
-## Observability
-
-Press **Traces** in the header, or the latency and cost under any reply. Each turn, typed or spoken,
-is a tree of spans:
-
-```text
-turn                                   text · 6 model calls · $0.00045
-├─ model call      gpt-6-luna · 1040 → 23 tok   prompt, output, TTFT, cached tokens, cost
-├─ tool: verify_customer                Priya Shah · Pro · active
-├─ tool: search_policies                high confidence · 4 passages
-│  ├─ hybrid search                     query, top passages with cosine and both ranks
-│  │  └─ embedding                      text-embedding-3-small · 10 tokens
-│  └─ confidence check                  band, decision, reason
-│     └─ support judge                  verdict, supporting passage ids
-├─ tool: issue_refund                   $29.00 refunded · re_…
-└─ model call      gpt-6-luna            the answer
-```
-
-A `Tracer` rides along with the turn in a context variable, like the usage meter, so the model
-client, tools, retrieval and judge each open their own span without being handed anything, and
-spans nest by context. The whole trace is streamed just before the turn's `done` event, saved to
-the `traces` table, and readable again at `GET /sessions/{session_id}/traces`. A model call span
-holds the exact instructions and input it was given (long fields clipped), its output and tool
-calls, token counts including cached and reasoning tokens, time to first token and cost. Voice
-turns add a span for waiting on the transcript, and a call reports the seconds GPT-Live billed
-and their cost ($0.05 per active minute, $0.02 on standby).
-
-The drawer adds up the session: cost (agent and voice), turns, latency, tokens, model calls and
-recoveries, and shows each turn as a waterfall; click any span for its details.
-
-## Error recovery
-
-Recovery is explicit, so it can be seen and tested rather than happening inside an SDK:
-
-| Failure | What happens | Where it shows |
-| --- | --- | --- |
-| Model timeout, dropped connection, 5xx | One retry after a short backoff | A failed `model call` span (`timed out → retry`), then a good one |
-| Rate limit (429) | Retry honoring `Retry-After`, then `gpt-5.4-mini` as a fallback | Two failed spans, then the fallback model's |
-| Transient database error in a tool | The tool is retried once (safe: refunds are idempotent, tickets dedupe) | The step reads "recovered after a retry" |
-| A tool keeps failing | The model is told it's unavailable; it apologizes and hands over | Failed step, a ticket, attempts in the span |
-| Anything else mid-turn | A typed, retryable `error` event, then `done`, never a hung stream | Retry button on the reply |
-
-A call that has already streamed text is never retried, since the customer would see words twice.
-The fallback model doesn't get the main model's encrypted reasoning, which only replays on the
-model that produced it.
-
-**Show it on demand.** In demo mode the drawer can inject one failure into the next message: a
-model timeout, a rate limit, a database blip or an account-system outage. It goes through the
-same recovery code as a real failure (`app/observability/faults.py`), and each path has a test
-and passes against the real model.
-
-## Repository layout
-
-```text
-apps/api/            FastAPI service
-  app/contracts/     Pydantic models for everything streamed to the UI
-  app/routes/        HTTP endpoints (chat and voice SSE, health, token-protected KB ingest)
-  app/agent/         LangGraph agent: graph, tools, prompts, Responses API client
-  app/voice/         GPT-Live session setup and the delegation bridge
-  app/observability/ Tracing, usage and cost, demo failure injection
-  app/data/          CRM queries: customers, charges, idempotent refunds, tickets
-  app/policy/        policy.yaml and the refund policy engine
-  app/rag/           chunking, ingestion, hybrid retrieval, guardrails, thresholds.yaml
-  scripts/           contract export, RAG eval, agent scenarios, real voice call, KB push
-apps/web/            Next.js 16 UI
-  lib/generated/     TypeScript types generated from the API's contracts
-  lib/sse.ts         Incremental SSE parser for POST streams
-  components/chat/   Chat panel, steps, cited answers, escalation card, customer switcher
-  components/voice/  Call panel, waveform, call hook
-  components/observability/ Trace drawer, span details
-contracts/           JSON Schema exported from the Pydantic models
-kb/                  Acme Cloud policy and troubleshooting docs (RAG source)
-evals/               labeled questions and the latest results
-supabase/migrations/ Schema, RLS lock-down, demo data function
-```
-
-## Design decisions so far
-
-- **One typed event contract.** Every streamed event is a member of a Pydantic discriminated union.
-  Its JSON Schema generates the TypeScript types, and CI fails if they drift.
-- **SSE over POST.** Each chat turn is one request with one-way streaming, so SSE is simpler than
-  WebSockets. The browser parses the stream itself because `EventSource` only supports GET.
-- **Policy as config.** Refund limits, windows, response times and verification attempts live in
-  `policy.yaml`. The policy engine enforces them, and a test fails if the knowledge base states
-  different numbers.
-- **Demo data that doesn't expire.** `reset_demo_data()` seeds charges relative to `now()`, so
-  refund-window scenarios behave the same whenever the demo is opened.
-- **Postgres for everything stateful.** Agent checkpoints, CRM data, vectors and (next) traces
-  share one database, so a stateless function can resume any session.
-- **Server-only database access.** RLS is on with no policies and API roles have no grants; only
-  the API's server connection can read or write.
+- **The model proposes, code decides.** Refund limits, windows, eligibility and "keep the
+  original of a duplicate pair" are enforced by a policy engine fed from `policy.yaml`, not by the
+  prompt. A test fails if the knowledge base states different numbers.
+- **Guardrails before answers.** Weak retrieval matches escalate without an LLM call; anything
+  else must be confirmed by a judge citing retrieved passage ids, and unverified citations are
+  dropped.
+- **One typed event contract.** Pydantic models export a JSON Schema that generates the UI's
+  TypeScript types; CI fails on drift.
+- **Postgres for all state.** CRM data, vectors, agent checkpoints, traces and rate limits share
+  one database, so stateless serverless functions can serve any conversation.
+- **Recovery you can see.** Retries and fallbacks happen in our code, not inside an SDK, so each
+  attempt is a span in the trace.
+- **Server-only data access.** RLS is on with no policies and public roles have no grants; the
+  browser never talks to the database, and the voice API key never reaches it.
 
 ## Running locally
 
-Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22.
+Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22, and a Postgres with
+pgvector (Supabase works).
 
 ```bash
-cp .env.example apps/api/.env        # keep the API section
+cp .env.example apps/api/.env        # keep the API section, add OPENAI_API_KEY and DATABASE_URL
 cp .env.example apps/web/.env.local  # keep the web section
 make install
 make dev-api   # http://localhost:8000
 make dev-web   # http://localhost:3000
-make check     # lint, type checks and tests for both apps
+make check     # lint, types, formatting and tests for both apps
 ```
 
-After changing anything in `apps/api/app/contracts`, run `make contracts`.
+Apply `supabase/migrations` in order, then load the knowledge base:
+`API_URL=… ADMIN_TOKEN=… uv run python -m scripts.push_kb` from `apps/api`. After changing
+`apps/api/app/contracts`, run `make contracts`.
+
+Evaluation scripts (from `apps/api`): `scripts.run_evals` (RAG), `scripts.run_scenarios
+[--api URL]` (agent), `scripts.voice_e2e` (a real voice call).
 
 ## Deployment
 
-Both apps run on Vercel as separate projects, with Supabase for the database.
+Both apps are Vercel projects; Supabase holds the database.
 
-| Project | Root directory | Environment variables |
+| Project | Root | Environment |
 | --- | --- | --- |
-| API (FastAPI on Vercel Functions, Fluid compute) | `apps/api` | `CORS_ORIGINS` = the web app's URL, `DATABASE_URL` (Supabase pooler), `OPENAI_API_KEY`, optional `ADMIN_TOKEN` to enable KB ingest |
-| Web (Next.js) | `apps/web` | `NEXT_PUBLIC_API_URL` = the API's URL (baked in at build time, so redeploy after changing it) |
+| API | `apps/api` | `CORS_ORIGINS`, `DATABASE_URL` (pooler), `OPENAI_API_KEY`, optional `ADMIN_TOKEN`, limits (see `.env.example`) |
+| Web | `apps/web` | `NEXT_PUBLIC_API_URL` (baked in at build time) |
 
-Functions are stateless and capped at 300 s on the Hobby plan, so all session state lives in
-Postgres and every stream (including a voice call's server connection) stays within that limit.
-`apps/api/Dockerfile` runs the same API on any container host if a persistent server is needed.
+Functions are stateless and capped at 300 s, so state lives in Postgres and voice calls end at
+3 minutes. `apps/api/Dockerfile` runs the API on any container host.
 
-Database: apply `supabase/migrations` in order, then load the knowledge base with
-`API_URL=https://<api-url> ADMIN_TOKEN=… uv run python -m scripts.push_kb` from `apps/api`.
+## Repository layout
+
+```text
+apps/api/    FastAPI: agent/, voice/, rag/, policy/, data/, observability/, routes/, contracts/
+apps/web/    Next.js 16: components/{chat,voice,observability}, lib/ (SSE, state, generated types)
+contracts/   JSON Schema exported from the API's Pydantic models
+kb/          Acme Cloud policy and troubleshooting docs (the RAG source)
+evals/       Labeled questions, RAG results, agent scenario results
+supabase/    Migrations: schema, RLS lock-down, demo data, rate limits
+docs/        Agent, RAG, voice, observability and error recovery in depth
+```
