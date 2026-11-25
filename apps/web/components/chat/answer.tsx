@@ -1,6 +1,7 @@
 import { BookOpen } from "lucide-react";
 
 import { segmentAnswer } from "@/lib/citations";
+import { inlineMarkdown } from "@/lib/inline-markdown";
 import type { Citation } from "@/lib/generated/agent-events";
 
 /** Answer text with numbered citation markers, followed by the cited sources. */
@@ -13,7 +14,19 @@ export function Answer({ text, citations, streaming }: { text: string; citations
       <p className="leading-relaxed whitespace-pre-wrap">
         {segments.map((segment, i) =>
           segment.kind === "text" ? (
-            segment.text
+            inlineMarkdown(segment.text).map((part, j) =>
+              part.kind === "bold" ? (
+                <strong key={`${i}.${j}`} className="font-semibold">
+                  {part.text}
+                </strong>
+              ) : part.kind === "code" ? (
+                <code key={`${i}.${j}`} className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">
+                  {part.text}
+                </code>
+              ) : (
+                part.text
+              ),
+            )
           ) : (
             <sup key={i} className="ml-0.5">
               <a
